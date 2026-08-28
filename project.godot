@@ -22,6 +22,7 @@ boot_splash/use_filter=true
 [autoload]
 
 NetworkState="*res://autoloads/network_state.gd"
+WindowControls="*res://autoloads/window_controls.gd"
 
 [editor_plugins]
 
@@ -73,3 +74,7 @@ reset_round={
 [rendering]
 
 renderer/rendering_method="forward_plus"
+
+[display]
+
+window/size/mode=2
