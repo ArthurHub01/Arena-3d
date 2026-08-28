@@ -253,6 +253,7 @@ func _apply_damage(amount: int, element: ElementType.Type = ElementType.Type.NON
 	last_hit_element = element
 	stats.apply_damage(amount)
 	damaged.emit(stats.current_hp)
+	VFX.spawn_impact(get_parent(), global_position + Vector3(0, 1.0, 0), ElementType.get_color(element))
 	if knockback_force > 0.0 and knockback_dir.length() > 0.01:
 		var flat_dir := Vector3(knockback_dir.x, 0, knockback_dir.z).normalized()
 		velocity += flat_dir * knockback_force

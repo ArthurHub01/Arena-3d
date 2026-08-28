@@ -8,19 +8,7 @@ class_name ElementIcon
 		queue_redraw()
 
 func _get_element_color() -> Color:
-	match element:
-		ElementType.Type.FIRE:
-			return Color(0.95, 0.38, 0.12, 1.0)
-		ElementType.Type.WATER:
-			return Color(0.28, 0.56, 0.92, 1.0)
-		ElementType.Type.EARTH:
-			return Color(0.55, 0.40, 0.20, 1.0)
-		ElementType.Type.AIR:
-			return Color(0.80, 0.88, 0.86, 1.0)
-		ElementType.Type.LIGHTNING:
-			return Color(0.95, 0.85, 0.28, 1.0)
-		_:
-			return Color(0.7, 0.7, 0.7, 1.0)
+	return ElementType.get_color(element)
 
 func _diamond(c: Vector2, r: float) -> PackedVector2Array:
 	return PackedVector2Array([c + Vector2(0, -r), c + Vector2(r, 0), c + Vector2(0, r), c + Vector2(-r, 0)])
