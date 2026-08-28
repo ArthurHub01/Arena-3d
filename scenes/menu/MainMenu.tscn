@@ -1,8 +1,11 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scenes/menu/main_menu.gd" id="1"]
 [ext_resource type="Script" path="res://scenes/menu/reticle_mark.gd" id="2"]
 [ext_resource type="Texture2D" path="res://assets/icon.png" id="3"]
+[ext_resource type="Script" path="res://scenes/menu/element_icon.gd" id="4"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_1"]
 
 [node name="MainMenu" type="Control"]
 layout_mode = 3
@@ -20,7 +23,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.039, 0.039, 0.051, 1)
+color = Color(0.055, 0.045, 0.036, 1)
 
 [node name="CenterContainer" type="CenterContainer" parent="."]
 layout_mode = 1
@@ -31,9 +34,9 @@ grow_horizontal = 2
 grow_vertical = 2
 
 [node name="Panel" type="VBoxContainer" parent="CenterContainer"]
-custom_minimum_size = Vector2(380, 0)
+custom_minimum_size = Vector2(400, 0)
 layout_mode = 2
-theme_override_constants/separation = 14
+theme_override_constants/separation = 12
 
 [node name="EmblemWrap" type="Control" parent="CenterContainer/Panel"]
 custom_minimum_size = Vector2(0, 88)
@@ -74,20 +77,139 @@ stretch_mode = 5
 
 [node name="Title" type="Label" parent="CenterContainer/Panel"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.91, 0.902, 0.882, 1)
+theme_override_colors/font_color = Color(0.925, 0.895, 0.84, 1)
 theme_override_font_sizes/font_size = 40
 horizontal_alignment = 1
 text = "ARENA"
 
 [node name="Eyebrow" type="Label" parent="CenterContainer/Panel"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.431, 0.431, 0.463, 1)
+theme_override_colors/font_color = Color(0.55, 0.48, 0.40, 1)
 theme_override_font_sizes/font_size = 13
 horizontal_alignment = 1
 text = "COMBATE ONLINE · 1V1"
 
 [node name="Spacer1" type="Control" parent="CenterContainer/Panel"]
-custom_minimum_size = Vector2(0, 8)
+custom_minimum_size = Vector2(0, 4)
+layout_mode = 2
+
+[node name="ElementLabel" type="Label" parent="CenterContainer/Panel"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.48, 0.40, 1)
+theme_override_font_sizes/font_size = 13
+horizontal_alignment = 1
+text = "ESCOLHA SEU ELEMENTO"
+
+[node name="ElementRow" type="HBoxContainer" parent="CenterContainer/Panel"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="FireButton" type="Button" parent="CenterContainer/Panel/ElementRow"]
+custom_minimum_size = Vector2(56, 56)
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxEmpty_1")
+theme_override_styles/hover = SubResource("StyleBoxEmpty_1")
+theme_override_styles/pressed = SubResource("StyleBoxEmpty_1")
+theme_override_styles/focus = SubResource("StyleBoxEmpty_1")
+
+[node name="ElementIcon" type="Control" parent="CenterContainer/Panel/ElementRow/FireButton"]
+mouse_filter = 2
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("4")
+element = 1
+
+[node name="WaterButton" type="Button" parent="CenterContainer/Panel/ElementRow"]
+custom_minimum_size = Vector2(56, 56)
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxEmpty_1")
+theme_override_styles/hover = SubResource("StyleBoxEmpty_1")
+theme_override_styles/pressed = SubResource("StyleBoxEmpty_1")
+theme_override_styles/focus = SubResource("StyleBoxEmpty_1")
+
+[node name="ElementIcon" type="Control" parent="CenterContainer/Panel/ElementRow/WaterButton"]
+mouse_filter = 2
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("4")
+element = 2
+
+[node name="EarthButton" type="Button" parent="CenterContainer/Panel/ElementRow"]
+custom_minimum_size = Vector2(56, 56)
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxEmpty_1")
+theme_override_styles/hover = SubResource("StyleBoxEmpty_1")
+theme_override_styles/pressed = SubResource("StyleBoxEmpty_1")
+theme_override_styles/focus = SubResource("StyleBoxEmpty_1")
+
+[node name="ElementIcon" type="Control" parent="CenterContainer/Panel/ElementRow/EarthButton"]
+mouse_filter = 2
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("4")
+element = 3
+
+[node name="AirButton" type="Button" parent="CenterContainer/Panel/ElementRow"]
+custom_minimum_size = Vector2(56, 56)
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxEmpty_1")
+theme_override_styles/hover = SubResource("StyleBoxEmpty_1")
+theme_override_styles/pressed = SubResource("StyleBoxEmpty_1")
+theme_override_styles/focus = SubResource("StyleBoxEmpty_1")
+
+[node name="ElementIcon" type="Control" parent="CenterContainer/Panel/ElementRow/AirButton"]
+mouse_filter = 2
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("4")
+element = 4
+
+[node name="LightningButton" type="Button" parent="CenterContainer/Panel/ElementRow"]
+custom_minimum_size = Vector2(56, 56)
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxEmpty_1")
+theme_override_styles/hover = SubResource("StyleBoxEmpty_1")
+theme_override_styles/pressed = SubResource("StyleBoxEmpty_1")
+theme_override_styles/focus = SubResource("StyleBoxEmpty_1")
+
+[node name="ElementIcon" type="Control" parent="CenterContainer/Panel/ElementRow/LightningButton"]
+mouse_filter = 2
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("4")
+element = 5
+
+[node name="ElementNameLabel" type="Label" parent="CenterContainer/Panel"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.63, 0.30, 1)
+theme_override_font_sizes/font_size = 15
+horizontal_alignment = 1
+text = "Fogo"
+
+[node name="Spacer1b" type="Control" parent="CenterContainer/Panel"]
+custom_minimum_size = Vector2(0, 4)
 layout_mode = 2
 
 [node name="HostButton" type="Button" parent="CenterContainer/Panel"]
@@ -97,7 +219,7 @@ text = "HOSPEDAR"
 
 [node name="Divider" type="Label" parent="CenterContainer/Panel"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.431, 0.431, 0.463, 1)
+theme_override_colors/font_color = Color(0.55, 0.48, 0.40, 1)
 theme_override_font_sizes/font_size = 13
 horizontal_alignment = 1
 text = "— OU CONECTE-SE —"
@@ -119,7 +241,7 @@ text = "ENTRAR"
 
 [node name="StatusLabel" type="Label" parent="CenterContainer/Panel"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.749, 0.847, 0.91, 1)
+theme_override_colors/font_color = Color(0.85, 0.63, 0.30, 1)
 theme_override_font_sizes/font_size = 15
 horizontal_alignment = 1
 text = ""
@@ -147,7 +269,7 @@ offset_right = -18.0
 offset_bottom = -14.0
 grow_horizontal = 0
 grow_vertical = 0
-theme_override_colors/font_color = Color(0.431, 0.431, 0.463, 1)
+theme_override_colors/font_color = Color(0.55, 0.48, 0.40, 1)
 theme_override_font_sizes/font_size = 13
 horizontal_alignment = 2
 text = ""

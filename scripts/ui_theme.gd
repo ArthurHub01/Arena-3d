@@ -1,12 +1,12 @@
 class_name UiTheme
 extends RefCounted
 
-const COL_VOID := Color(0.039, 0.039, 0.051, 1.0)
-const COL_PANEL := Color(0.071, 0.071, 0.086, 1.0)
-const COL_HAIRLINE := Color(0.149, 0.149, 0.173, 1.0)
-const COL_INK := Color(0.910, 0.902, 0.882, 1.0)
-const COL_INK_DIM := Color(0.431, 0.431, 0.463, 1.0)
-const COL_SIGNAL := Color(0.749, 0.847, 0.910, 1.0)
+const COL_VOID := Color(0.055, 0.045, 0.036, 1.0)
+const COL_PANEL := Color(0.090, 0.075, 0.058, 1.0)
+const COL_HAIRLINE := Color(0.20, 0.165, 0.12, 1.0)
+const COL_INK := Color(0.925, 0.895, 0.84, 1.0)
+const COL_INK_DIM := Color(0.55, 0.48, 0.40, 1.0)
+const COL_SIGNAL := Color(0.85, 0.63, 0.30, 1.0)
 const COL_BLOOD := Color(0.549, 0.165, 0.125, 1.0)
 const COL_HEALTH := Color(0.85, 0.16, 0.16, 1.0)
 

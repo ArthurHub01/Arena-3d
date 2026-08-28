@@ -4,6 +4,7 @@ extends Resource
 enum Delivery {
 	MELEE,
 	PROJECTILE,
+	HITSCAN,
 }
 
 @export var ability_name: String = "Ability"
@@ -19,3 +20,10 @@ enum Delivery {
 ## PROJECTILE only: travel speed and lifetime before despawning.
 @export var projectile_speed: float = 15.0
 @export var projectile_lifetime: float = 3.0
+
+## HITSCAN only: max distance the instant hit can reach.
+@export var hitscan_range: float = 25.0
+
+## On-hit effects, shared by any delivery type. 0 = no effect.
+@export var knockback_force: float = 0.0
+@export var stagger_duration: float = 0.0

@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="AbilityData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ability_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+ability_name = "Arremesso de Rochas"
+element = 3
+damage = 20
+cooldown = 1.4
+delivery = 1
+anim_name = "Human Armature|Punch"
+projectile_speed = 8.0
+projectile_lifetime = 4.0
+stagger_duration = 1.0

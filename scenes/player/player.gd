@@ -9,9 +9,6 @@ const JUMP_VELOCITY := 4.5
 const GRAVITY := 9.8
 const ARENA_RADIUS := 19.4
 
-const DEFAULT_MELEE_ABILITY_PATH := "res://assets/abilities/basic_melee.tres"
-const DEFAULT_RANGED_ABILITY_PATH := "res://assets/abilities/basic_ranged.tres"
-
 const CAMERA_DISTANCE := 5.0
 const CAMERA_HEIGHT := 2.4
 const LOOK_HEIGHT := 1.3
@@ -37,15 +34,19 @@ var stats: CombatStats = CombatStats.new()
 var is_local_player: bool = true
 var opponent: Player = null
 var match_active: bool = false
-var melee_ability: AbilityData = load(DEFAULT_MELEE_ABILITY_PATH)
-var ranged_ability: AbilityData = load(DEFAULT_RANGED_ABILITY_PATH)
-var melee_ready: bool = true
-var projectile_ready: bool = true
+var equipped_element: ElementType.Type = ElementType.Type.FIRE
+var basic_ability: AbilityData = AbilityLibrary.get_basic_ability(ElementType.Type.FIRE)
+var attack_ready: bool = true
 var last_hit_element: ElementType.Type = ElementType.Type.NONE
+var stagger_timer: float = 0.0
 var _model_yaw_offset: float = 0.0
 var _target_model_yaw_offset: float = 0.0
 
 var projectile_scene: PackedScene = preload("res://scenes/player/Projectile.tscn")
+
+func set_element(element: ElementType.Type) -> void:
+	equipped_element = element
+	basic_ability = AbilityLibrary.get_basic_ability(element)
 
 @rpc("unreliable_ordered", "call_remote")
 func _remote_update_transform(pos: Vector3, rot_y: float) -> void:
@@ -113,15 +114,25 @@ func _play_locomotion_anim(is_moving: bool, speed_ratio: float = 1.0, forward_am
 	anim_player.speed_scale = direction_sign * clamp(speed_ratio, 0.6, 1.8)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_local_player or not match_active:
+	if not is_local_player or not match_active or stagger_timer > 0.0:
 		return
-	if event.is_action_pressed("attack_melee") and melee_ready:
-		_do_melee_attack()
-	if event.is_action_pressed("attack_ranged") and projectile_ready:
-		_do_ranged_attack()
+	if event.is_action_pressed("attack_melee") and attack_ready:
+		_do_basic_attack()
 
 func _physics_process(delta: float) -> void:
 	if not is_local_player or not match_active:
+		return
+
+	if stagger_timer > 0.0:
+		stagger_timer -= delta
+		velocity.x = move_toward(velocity.x, 0.0, SPEED * delta * 4.0)
+		velocity.z = move_toward(velocity.z, 0.0, SPEED * delta * 4.0)
+		if not is_on_floor():
+			velocity.y -= GRAVITY * delta
+		move_and_slide()
+		_play_locomotion_anim(false)
+		if is_multiplayer_authority():
+			_remote_update_transform.rpc(global_position, rotation.y)
 		return
 
 	var has_opponent := is_instance_valid(opponent)
@@ -174,45 +185,74 @@ func _update_combat_camera(delta: float) -> void:
 	camera.global_position = camera.global_position.lerp(desired_pos, lerp_amount)
 	camera.look_at(desired_look, Vector3.UP)
 
-func _do_melee_attack() -> void:
-	melee_ready = false
-	var anim := melee_ability.anim_name if not melee_ability.anim_name.is_empty() else ANIM_PUNCH
+func _do_basic_attack() -> void:
+	attack_ready = false
+	var anim := basic_ability.anim_name if not basic_ability.anim_name.is_empty() else ANIM_PUNCH
 	anim_player.play(anim)
 	_show_attack_anim.rpc(anim)
-	melee_area.get_child(0).shape.radius = melee_ability.melee_range
-	for body in melee_area.get_overlapping_bodies():
-		if body is Player and body != self:
-			body.take_damage(melee_ability.damage, melee_ability.element)
-	get_tree().create_timer(melee_ability.cooldown).timeout.connect(func(): melee_ready = true)
+
+	match basic_ability.delivery:
+		AbilityData.Delivery.MELEE:
+			_execute_melee()
+		AbilityData.Delivery.PROJECTILE:
+			_execute_projectile()
+		AbilityData.Delivery.HITSCAN:
+			_execute_hitscan()
+
+	get_tree().create_timer(basic_ability.cooldown).timeout.connect(func(): attack_ready = true)
 
 @rpc("unreliable_ordered", "call_remote")
 func _show_attack_anim(anim: String) -> void:
 	anim_player.play(anim)
 
-func _do_ranged_attack() -> void:
-	projectile_ready = false
+func _execute_melee() -> void:
+	melee_area.get_child(0).shape.radius = basic_ability.melee_range
+	for body in melee_area.get_overlapping_bodies():
+		if body is Player and body != self:
+			var dir := (body.global_position - global_position)
+			body.take_damage(basic_ability.damage, basic_ability.element, dir, basic_ability.knockback_force, basic_ability.stagger_duration)
+
+func _execute_projectile() -> void:
 	var projectile: Projectile = projectile_scene.instantiate()
-	projectile.damage = ranged_ability.damage
-	projectile.element = ranged_ability.element
-	projectile.speed = ranged_ability.projectile_speed
-	projectile.lifetime = ranged_ability.projectile_lifetime
+	projectile.damage = basic_ability.damage
+	projectile.element = basic_ability.element
+	projectile.speed = basic_ability.projectile_speed
+	projectile.lifetime = basic_ability.projectile_lifetime
+	projectile.knockback_force = basic_ability.knockback_force
+	projectile.stagger_duration = basic_ability.stagger_duration
 	projectile.shooter = self
 	get_parent().add_child(projectile)
 	projectile.global_transform = muzzle_point.global_transform
-	get_tree().create_timer(ranged_ability.cooldown).timeout.connect(func(): projectile_ready = true)
 
-func take_damage(amount: int, element: ElementType.Type = ElementType.Type.NONE) -> void:
+func _execute_hitscan() -> void:
+	var space_state := get_world_3d().direct_space_state
+	var from := muzzle_point.global_position
+	var to := from - global_transform.basis.z * basic_ability.hitscan_range
+	var query := PhysicsRayQueryParameters3D.create(from, to, 2)
+	query.exclude = [self]
+	var result := space_state.intersect_ray(query)
+	if result and result.collider is Player and result.collider != self:
+		var target: Player = result.collider
+		var dir := (target.global_position - global_position)
+		target.take_damage(basic_ability.damage, basic_ability.element, dir, basic_ability.knockback_force, basic_ability.stagger_duration)
+
+func take_damage(amount: int, element: ElementType.Type = ElementType.Type.NONE, knockback_dir: Vector3 = Vector3.ZERO, knockback_force: float = 0.0, stagger_duration: float = 0.0) -> void:
 	if multiplayer.has_multiplayer_peer():
 		if multiplayer.is_server():
-			_apply_damage.rpc(amount, element)
+			_apply_damage.rpc(amount, element, knockback_dir, knockback_force, stagger_duration)
 	else:
-		_apply_damage(amount, element)
+		_apply_damage(amount, element, knockback_dir, knockback_force, stagger_duration)
 
 @rpc("call_local", "reliable", "any_peer")
-func _apply_damage(amount: int, element: ElementType.Type = ElementType.Type.NONE) -> void:
+func _apply_damage(amount: int, element: ElementType.Type = ElementType.Type.NONE, knockback_dir: Vector3 = Vector3.ZERO, knockback_force: float = 0.0, stagger_duration: float = 0.0) -> void:
 	last_hit_element = element
 	stats.apply_damage(amount)
 	damaged.emit(stats.current_hp)
+	if knockback_force > 0.0 and knockback_dir.length() > 0.01:
+		var flat_dir := Vector3(knockback_dir.x, 0, knockback_dir.z).normalized()
+		velocity += flat_dir * knockback_force
+	if stagger_duration > 0.0:
+		stagger_timer = max(stagger_timer, stagger_duration)
 	if stats.is_dead():
 		died.emit()
 
@@ -220,4 +260,5 @@ func reset_player(spawn_position: Vector3) -> void:
 	stats.reset()
 	global_position = spawn_position
 	velocity = Vector3.ZERO
+	stagger_timer = 0.0
 	damaged.emit(stats.current_hp)

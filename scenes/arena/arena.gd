@@ -35,9 +35,8 @@ func _ready() -> void:
 			winner_label.show()
 			return
 		multiplayer.multiplayer_peer = peer
-		multiplayer.peer_connected.connect(_on_peer_connected)
 		multiplayer.peer_disconnected.connect(_on_peer_disconnected)
-		_spawn_player(1, spawn_p1.global_position, true)
+		_spawn_player(1, spawn_p1.global_position, true, NetworkState.selected_element)
 		waiting_label.show()
 	else:
 		var peer := ENetMultiplayerPeer.new()
@@ -47,13 +46,19 @@ func _ready() -> void:
 			winner_label.show()
 			return
 		multiplayer.multiplayer_peer = peer
+		multiplayer.connected_to_server.connect(_on_connected_to_server)
 
-func _on_peer_connected(id: int) -> void:
+func _on_connected_to_server() -> void:
+	_report_element.rpc_id(1, NetworkState.selected_element)
+
+@rpc("any_peer", "reliable")
+func _report_element(element: ElementType.Type) -> void:
 	if not multiplayer.is_server():
 		return
-	_spawn_player(id, spawn_p2.global_position, false)
-	_spawn_player_rpc.rpc_id(id, 1, spawn_p1.global_position, true)
-	_spawn_player_rpc.rpc_id(id, id, spawn_p2.global_position, false)
+	var sender_id := multiplayer.get_remote_sender_id()
+	_spawn_player(sender_id, spawn_p2.global_position, false, element)
+	_spawn_player_rpc.rpc_id(sender_id, 1, spawn_p1.global_position, true, NetworkState.selected_element)
+	_spawn_player_rpc.rpc_id(sender_id, sender_id, spawn_p2.global_position, false, element)
 
 func _on_peer_disconnected(id: int) -> void:
 	if players_by_id.has(id):
@@ -73,13 +78,14 @@ func _on_peer_disconnected(id: int) -> void:
 		waiting_label.show()
 
 @rpc("any_peer", "reliable")
-func _spawn_player_rpc(id: int, spawn_position: Vector3, is_first: bool) -> void:
-	_spawn_player(id, spawn_position, is_first)
+func _spawn_player_rpc(id: int, spawn_position: Vector3, is_first: bool, element: ElementType.Type) -> void:
+	_spawn_player(id, spawn_position, is_first, element)
 
-func _spawn_player(id: int, spawn_position: Vector3, is_first: bool) -> void:
+func _spawn_player(id: int, spawn_position: Vector3, is_first: bool, element: ElementType.Type) -> void:
 	var player: Player = PLAYER_SCENE.instantiate()
 	player.name = str(id)
 	player.is_local_player = (id == multiplayer.get_unique_id())
+	player.set_element(element)
 	add_child(player)
 	player.global_position = spawn_position
 	player.set_multiplayer_authority(id)

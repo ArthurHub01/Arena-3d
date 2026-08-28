@@ -4,10 +4,10 @@
 
 [resource]
 script = ExtResource("1")
-ability_name = "Soco"
-element = 0
-damage = 15
+ability_name = "Centelha"
+element = 5
+damage = 10
 cooldown = 0.6
-delivery = 0
+delivery = 2
 anim_name = "Human Armature|Punch"
-melee_range = 1.0
+hitscan_range = 30.0

@@ -1,7 +1,7 @@
 extends Control
 class_name ReticleMark
 
-@export var ring_color: Color = Color(0.749, 0.847, 0.910, 1.0)
+@export var ring_color: Color = Color(0.85, 0.63, 0.30, 1.0)
 @export var line_width: float = 1.5
 @export var pulse: bool = true
 

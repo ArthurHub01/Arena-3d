@@ -4,6 +4,8 @@ class_name Projectile
 var speed: float = 15.0
 var damage: int = 10
 var element: ElementType.Type = ElementType.Type.NONE
+var knockback_force: float = 0.0
+var stagger_duration: float = 0.0
 var shooter: Player = null
 var lifetime: float = 3.0
 
@@ -16,5 +18,6 @@ func _physics_process(delta: float) -> void:
 
 func _on_body_entered(body: Node3D) -> void:
 	if body is Player and body != shooter:
-		body.take_damage(damage, element)
+		var dir := -global_transform.basis.z
+		body.take_damage(damage, element, dir, knockback_force, stagger_duration)
 		queue_free()

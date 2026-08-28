@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="AbilityData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ability_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+ability_name = "Projétil de Chamas"
+element = 1
+damage = 8
+cooldown = 0.5
+delivery = 1
+anim_name = "Human Armature|Punch"
+projectile_speed = 20.0
+projectile_lifetime = 2.5

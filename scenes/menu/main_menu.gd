@@ -13,19 +13,26 @@ const ARENA_SCENE_PATH := "res://scenes/arena/Arena.tscn"
 @onready var title_label: Label = $CenterContainer/Panel/Title
 @onready var eyebrow_label: Label = $CenterContainer/Panel/Eyebrow
 @onready var divider_label: Label = $CenterContainer/Panel/Divider
+@onready var element_label: Label = $CenterContainer/Panel/ElementLabel
+@onready var element_name_label: Label = $CenterContainer/Panel/ElementNameLabel
+@onready var element_row: HBoxContainer = $CenterContainer/Panel/ElementRow
 
 var updater: GameUpdater
 var pending_download_url := ""
+var element_buttons: Dictionary = {}
 
 func _ready() -> void:
 	theme = UiTheme.build()
 	title_label.add_theme_font_override("font", UiTheme.title_font())
 	eyebrow_label.add_theme_font_override("font", UiTheme.eyebrow_font())
 	divider_label.add_theme_font_override("font", UiTheme.eyebrow_font())
+	element_label.add_theme_font_override("font", UiTheme.eyebrow_font())
 
 	host_button.pressed.connect(_on_host_pressed)
 	join_button.pressed.connect(_on_join_pressed)
 	update_button.pressed.connect(_on_update_button_pressed)
+
+	_setup_element_buttons()
 
 	version_label.text = GameVersion.DISPLAY_NAME
 	get_window().title = "Arena 3D - %s" % GameVersion.DISPLAY_NAME
@@ -42,6 +49,19 @@ func _ready() -> void:
 	updater.check_for_update()
 
 	_check_cmdline_autoconnect()
+
+func _setup_element_buttons() -> void:
+	for button in element_row.get_children():
+		var icon: ElementIcon = button.get_child(0)
+		element_buttons[icon.element] = icon
+		button.pressed.connect(_on_element_selected.bind(icon.element))
+	_on_element_selected(NetworkState.selected_element)
+
+func _on_element_selected(element: ElementType.Type) -> void:
+	NetworkState.selected_element = element
+	for el in element_buttons:
+		element_buttons[el].selected = (el == element)
+	element_name_label.text = ElementType.display_name(element)
 
 func _check_cmdline_autoconnect() -> void:
 	for arg in OS.get_cmdline_user_args():

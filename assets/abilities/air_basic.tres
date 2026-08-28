@@ -4,10 +4,12 @@
 
 [resource]
 script = ExtResource("1")
-ability_name = "Disparo"
-element = 0
-damage = 10
-cooldown = 1.0
+ability_name = "Lâminas de Vento"
+element = 4
+damage = 6
+cooldown = 0.7
 delivery = 1
-projectile_speed = 15.0
-projectile_lifetime = 3.0
+anim_name = "Human Armature|Punch"
+projectile_speed = 22.0
+projectile_lifetime = 4.0
+knockback_force = 6.0
