@@ -12,7 +12,11 @@ const MELEE_DAMAGE := 15
 const MELEE_COOLDOWN := 0.6
 const PROJECTILE_DAMAGE := 10
 const PROJECTILE_COOLDOWN := 1.0
-const MOUSE_SENSITIVITY := 0.003
+
+const CAMERA_DISTANCE := 5.0
+const CAMERA_HEIGHT := 2.4
+const LOOK_HEIGHT := 1.3
+const CAMERA_LERP_SPEED := 6.0
 
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var camera: Camera3D = $CameraPivot/Camera3D
@@ -21,16 +25,16 @@ const MOUSE_SENSITIVITY := 0.003
 
 var stats: CombatStats = CombatStats.new()
 var is_local_player: bool = true
+var opponent: Player = null
 var melee_ready: bool = true
 var projectile_ready: bool = true
 
 var projectile_scene: PackedScene = preload("res://scenes/player/Projectile.tscn")
 
 @rpc("unreliable_ordered", "call_remote")
-func _remote_update_transform(pos: Vector3, rot_y: float, pivot_rot_x: float) -> void:
+func _remote_update_transform(pos: Vector3, rot_y: float) -> void:
 	global_position = pos
 	rotation.y = rot_y
-	camera_pivot.rotation.x = pivot_rot_x
 
 func _ready() -> void:
 	camera.current = is_local_player
@@ -38,10 +42,6 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_local_player:
 		return
-	if event is InputEventMouseMotion:
-		rotate_y(-event.relative.x * MOUSE_SENSITIVITY)
-		camera_pivot.rotate_x(-event.relative.y * MOUSE_SENSITIVITY)
-		camera_pivot.rotation.x = clamp(camera_pivot.rotation.x, -1.2, 1.2)
 	if event.is_action_pressed("attack_melee") and melee_ready:
 		_do_melee_attack()
 	if event.is_action_pressed("attack_ranged") and projectile_ready:
@@ -50,6 +50,14 @@ func _unhandled_input(event: InputEvent) -> void:
 func _physics_process(delta: float) -> void:
 	if not is_local_player:
 		return
+
+	var has_opponent := is_instance_valid(opponent)
+
+	if has_opponent:
+		var flat_target := Vector3(opponent.global_position.x, global_position.y, opponent.global_position.z)
+		if flat_target.distance_to(global_position) > 0.01:
+			look_at(flat_target, Vector3.UP)
+
 	if not is_on_floor():
 		velocity.y -= GRAVITY * delta
 	if Input.is_action_just_pressed("jump") and is_on_floor():
@@ -66,8 +74,26 @@ func _physics_process(delta: float) -> void:
 		global_position.x = horizontal.x
 		global_position.z = horizontal.y
 
+	if has_opponent:
+		_update_combat_camera(delta)
+
 	if is_multiplayer_authority():
-		_remote_update_transform.rpc(global_position, rotation.y, camera_pivot.rotation.x)
+		_remote_update_transform.rpc(global_position, rotation.y)
+
+func _update_combat_camera(delta: float) -> void:
+	var mid := (global_position + opponent.global_position) / 2.0
+	var away := global_position - opponent.global_position
+	away.y = 0
+	if away.length() < 0.01:
+		away = -global_transform.basis.z
+	away = away.normalized()
+
+	var desired_pos := global_position + away * CAMERA_DISTANCE + Vector3(0, CAMERA_HEIGHT, 0)
+	var desired_look := mid + Vector3(0, LOOK_HEIGHT, 0)
+
+	var lerp_amount: float = clamp(CAMERA_LERP_SPEED * delta, 0.0, 1.0)
+	camera.global_position = camera.global_position.lerp(desired_pos, lerp_amount)
+	camera.look_at(desired_look, Vector3.UP)
 
 func _do_melee_attack() -> void:
 	melee_ready = false
@@ -78,7 +104,7 @@ func _do_melee_attack() -> void:
 
 func _do_ranged_attack() -> void:
 	projectile_ready = false
-	var projectile = projectile_scene.instantiate()
+	var projectile: Projectile = projectile_scene.instantiate()
 	get_parent().add_child(projectile)
 	projectile.global_transform = muzzle_point.global_transform
 	projectile.damage = PROJECTILE_DAMAGE

@@ -51,7 +51,16 @@ func _on_peer_connected(id: int) -> void:
 
 func _on_peer_disconnected(id: int) -> void:
 	if players_by_id.has(id):
-		players_by_id[id].queue_free()
+		var disconnected_player: Player = players_by_id[id]
+		if player_one == disconnected_player:
+			player_one = null
+		elif player_two == disconnected_player:
+			player_two = null
+		if is_instance_valid(player_one):
+			player_one.opponent = null
+		if is_instance_valid(player_two):
+			player_two.opponent = null
+		disconnected_player.queue_free()
 		players_by_id.erase(id)
 
 @rpc("any_peer", "reliable")
@@ -72,6 +81,10 @@ func _spawn_player(id: int, spawn_position: Vector3, is_first: bool) -> void:
 		player_one = player
 	else:
 		player_two = player
+
+	if player_one != null and player_two != null:
+		player_one.opponent = player_two
+		player_two.opponent = player_one
 
 func _wire_player(player: Player, hp_bar: ProgressBar) -> void:
 	hp_bar.value = player.stats.current_hp
