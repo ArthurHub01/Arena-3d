@@ -8,6 +8,7 @@ const COL_INK := Color(0.910, 0.902, 0.882, 1.0)
 const COL_INK_DIM := Color(0.431, 0.431, 0.463, 1.0)
 const COL_SIGNAL := Color(0.749, 0.847, 0.910, 1.0)
 const COL_BLOOD := Color(0.549, 0.165, 0.125, 1.0)
+const COL_HEALTH := Color(0.85, 0.16, 0.16, 1.0)
 
 static func title_font() -> FontVariation:
 	var f := FontVariation.new()

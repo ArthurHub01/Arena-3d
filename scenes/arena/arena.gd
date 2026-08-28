@@ -5,11 +5,14 @@ const PLAYER_SCENE: PackedScene = preload("res://scenes/player/Player.tscn")
 
 @onready var spawn_p1: Marker3D = $SpawnP1
 @onready var spawn_p2: Marker3D = $SpawnP2
-@onready var hp_bar_p1: ProgressBar = $HUD/HpBarP1
-@onready var hp_bar_p2: ProgressBar = $HUD/HpBarP2
-@onready var winner_label: Label = $HUD/WinnerLabel
-@onready var menu_button: Button = $HUD/MenuButton
-@onready var waiting_label: Label = $HUD/WaitingLabel
+@onready var hud_root: Control = $HUD/HUDRoot
+@onready var hp_bar_p1: ChevronBar = $HUD/HUDRoot/HpGroupP1/HpBarWrapP1/HpBarP1
+@onready var hp_bar_p2: ChevronBar = $HUD/HUDRoot/HpGroupP2/HpBarWrapP2/HpBarP2
+@onready var hp_label_p1: Label = $HUD/HUDRoot/HpGroupP1/HpLabelP1
+@onready var hp_label_p2: Label = $HUD/HUDRoot/HpGroupP2/HpLabelP2
+@onready var winner_label: Label = $HUD/HUDRoot/WinnerLabel
+@onready var menu_button: Button = $HUD/HUDRoot/MenuButton
+@onready var waiting_label: Label = $HUD/HUDRoot/WaitingLabel
 
 const MAIN_MENU_SCENE_PATH := "res://scenes/menu/MainMenu.tscn"
 
@@ -20,8 +23,7 @@ var round_over: bool = false
 var players_by_id: Dictionary = {}
 
 func _ready() -> void:
-	menu_button.theme = UiTheme.build()
-	waiting_label.theme = menu_button.theme
+	hud_root.theme = UiTheme.build()
 	winner_label.hide()
 	waiting_label.hide()
 	menu_button.pressed.connect(_on_menu_button_pressed)
@@ -83,7 +85,8 @@ func _spawn_player(id: int, spawn_position: Vector3, is_first: bool) -> void:
 	player.set_multiplayer_authority(id)
 	players_by_id[id] = player
 	var hp_bar := hp_bar_p1 if is_first else hp_bar_p2
-	_wire_player(player, hp_bar)
+	var hp_label := hp_label_p1 if is_first else hp_label_p2
+	_wire_player(player, hp_bar, hp_label)
 	if is_first:
 		player_one = player
 	else:
@@ -96,9 +99,14 @@ func _spawn_player(id: int, spawn_position: Vector3, is_first: bool) -> void:
 		player_two.match_active = true
 		waiting_label.hide()
 
-func _wire_player(player: Player, hp_bar: ProgressBar) -> void:
+func _wire_player(player: Player, hp_bar: ChevronBar, hp_label: Label) -> void:
+	hp_bar.max_value = player.stats.max_hp
 	hp_bar.value = player.stats.current_hp
-	player.damaged.connect(func(current_hp): hp_bar.value = current_hp)
+	hp_label.text = "%d/%d" % [player.stats.current_hp, player.stats.max_hp]
+	player.damaged.connect(func(current_hp):
+		hp_bar.value = current_hp
+		hp_label.text = "%d/%d" % [current_hp, player.stats.max_hp]
+	)
 	player.died.connect(_check_round_end)
 
 func _check_round_end() -> void:
