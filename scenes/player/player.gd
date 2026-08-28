@@ -7,7 +7,7 @@ signal died()
 const SPEED := 6.0
 const JUMP_VELOCITY := 4.5
 const GRAVITY := 9.8
-const ARENA_RADIUS := 9.4
+const ARENA_RADIUS := 13.4
 const MELEE_DAMAGE := 15
 const MELEE_COOLDOWN := 0.6
 const PROJECTILE_DAMAGE := 10
