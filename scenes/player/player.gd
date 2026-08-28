@@ -32,8 +32,7 @@ func _remote_update_transform(pos: Vector3, rot_y: float, pivot_rot_x: float) ->
 	camera_pivot.rotation.x = pivot_rot_x
 
 func _ready() -> void:
-	if not is_local_player:
-		camera.current = false
+	camera.current = is_local_player
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_local_player:

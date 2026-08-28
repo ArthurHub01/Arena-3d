@@ -56,9 +56,9 @@ func _spawn_player_rpc(id: int, spawn_position: Vector3, is_first: bool) -> void
 func _spawn_player(id: int, spawn_position: Vector3, is_first: bool) -> void:
 	var player: Player = PLAYER_SCENE.instantiate()
 	player.name = str(id)
+	player.is_local_player = (id == multiplayer.get_unique_id())
 	add_child(player)
 	player.global_position = spawn_position
-	player.is_local_player = (id == multiplayer.get_unique_id())
 	player.set_multiplayer_authority(id)
 	players_by_id[id] = player
 	var hp_bar := hp_bar_p1 if is_first else hp_bar_p2
