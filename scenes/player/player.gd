@@ -26,6 +26,7 @@ const CAMERA_LERP_SPEED := 6.0
 var stats: CombatStats = CombatStats.new()
 var is_local_player: bool = true
 var opponent: Player = null
+var match_active: bool = false
 var melee_ready: bool = true
 var projectile_ready: bool = true
 
@@ -40,7 +41,7 @@ func _ready() -> void:
 	camera.current = is_local_player
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_local_player:
+	if not is_local_player or not match_active:
 		return
 	if event.is_action_pressed("attack_melee") and melee_ready:
 		_do_melee_attack()
@@ -48,7 +49,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		_do_ranged_attack()
 
 func _physics_process(delta: float) -> void:
-	if not is_local_player:
+	if not is_local_player or not match_active:
 		return
 
 	var has_opponent := is_instance_valid(opponent)

@@ -9,6 +9,7 @@ const PLAYER_SCENE: PackedScene = preload("res://scenes/player/Player.tscn")
 @onready var hp_bar_p2: ProgressBar = $HUD/HpBarP2
 @onready var winner_label: Label = $HUD/WinnerLabel
 @onready var menu_button: Button = $HUD/MenuButton
+@onready var waiting_label: Label = $HUD/WaitingLabel
 
 const MAIN_MENU_SCENE_PATH := "res://scenes/menu/MainMenu.tscn"
 
@@ -20,7 +21,9 @@ var players_by_id: Dictionary = {}
 
 func _ready() -> void:
 	menu_button.theme = UiTheme.build()
+	waiting_label.theme = menu_button.theme
 	winner_label.hide()
+	waiting_label.hide()
 	menu_button.pressed.connect(_on_menu_button_pressed)
 	if NetworkState.is_host:
 		var peer := ENetMultiplayerPeer.new()
@@ -33,6 +36,7 @@ func _ready() -> void:
 		multiplayer.peer_connected.connect(_on_peer_connected)
 		multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 		_spawn_player(1, spawn_p1.global_position, true)
+		waiting_label.show()
 	else:
 		var peer := ENetMultiplayerPeer.new()
 		var err := peer.create_client(NetworkState.host_ip, NetworkState.PORT)
@@ -58,10 +62,13 @@ func _on_peer_disconnected(id: int) -> void:
 			player_two = null
 		if is_instance_valid(player_one):
 			player_one.opponent = null
+			player_one.match_active = false
 		if is_instance_valid(player_two):
 			player_two.opponent = null
+			player_two.match_active = false
 		disconnected_player.queue_free()
 		players_by_id.erase(id)
+		waiting_label.show()
 
 @rpc("any_peer", "reliable")
 func _spawn_player_rpc(id: int, spawn_position: Vector3, is_first: bool) -> void:
@@ -85,6 +92,9 @@ func _spawn_player(id: int, spawn_position: Vector3, is_first: bool) -> void:
 	if player_one != null and player_two != null:
 		player_one.opponent = player_two
 		player_two.opponent = player_one
+		player_one.match_active = true
+		player_two.match_active = true
+		waiting_label.hide()
 
 func _wire_player(player: Player, hp_bar: ProgressBar) -> void:
 	hp_bar.value = player.stats.current_hp
