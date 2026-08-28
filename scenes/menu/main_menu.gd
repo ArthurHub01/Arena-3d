@@ -67,6 +67,14 @@ func _on_element_selected(element: ElementType.Type) -> void:
 
 func _check_cmdline_autoconnect() -> void:
 	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--element="):
+			var name := arg.split("=", true, 1)[1]
+			match name:
+				"water": _on_element_selected(ElementType.Type.WATER)
+				"earth": _on_element_selected(ElementType.Type.EARTH)
+				"air": _on_element_selected(ElementType.Type.AIR)
+				"lightning": _on_element_selected(ElementType.Type.LIGHTNING)
+	for arg in OS.get_cmdline_user_args():
 		if arg == "--auto-host":
 			_on_host_pressed()
 		elif arg.begins_with("--auto-join="):
