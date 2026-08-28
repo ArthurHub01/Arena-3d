@@ -53,14 +53,12 @@ func _remote_update_transform(pos: Vector3, rot_y: float) -> void:
 	var delta_pos := pos - global_position
 	var moved := delta_pos.length()
 	if moved > 0.01:
-		var forward := Vector3(-sin(rot_y), 0, -cos(rot_y))
-		var forward_amount := delta_pos.normalized().dot(forward)
 		var speed_ratio: float = clamp(moved / (SPEED / 60.0), 0.5, 2.0)
-		_play_locomotion_anim(true, speed_ratio, forward_amount)
+		_play_locomotion_anim(true, speed_ratio)
 		var local_delta := delta_pos.rotated(Vector3.UP, -rot_y)
 		_target_model_yaw_offset = _model_yaw_from_local_dir(Vector2(local_delta.x, local_delta.z))
 	else:
-		_play_locomotion_anim(false, 0.0, 0.0)
+		_play_locomotion_anim(false)
 		_target_model_yaw_offset = 0.0
 	global_position = pos
 	rotation.y = rot_y
@@ -100,7 +98,7 @@ func _find_mesh_instance(node: Node) -> MeshInstance3D:
 			return found
 	return null
 
-func _play_locomotion_anim(is_moving: bool, speed_ratio: float = 1.0, forward_amount: float = 1.0) -> void:
+func _play_locomotion_anim(is_moving: bool, speed_ratio: float = 1.0) -> void:
 	if anim_player.current_animation == ANIM_PUNCH and anim_player.is_playing():
 		return
 	if not is_moving:
@@ -110,13 +108,12 @@ func _play_locomotion_anim(is_moving: bool, speed_ratio: float = 1.0, forward_am
 		return
 	if anim_player.current_animation != ANIM_WALK:
 		anim_player.play(ANIM_WALK)
-	var direction_sign := -1.0 if forward_amount < -0.3 else 1.0
-	anim_player.speed_scale = direction_sign * clamp(speed_ratio, 0.6, 1.8)
+	anim_player.speed_scale = clamp(speed_ratio, 0.6, 1.8)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_local_player or not match_active or stagger_timer > 0.0:
 		return
-	if event.is_action_pressed("attack_melee") and attack_ready:
+	if (event.is_action_pressed("attack_melee") or event.is_action_pressed("attack_ranged")) and attack_ready:
 		_do_basic_attack()
 
 func _physics_process(delta: float) -> void:
@@ -155,7 +152,7 @@ func _physics_process(delta: float) -> void:
 	var horizontal_speed := Vector2(velocity.x, velocity.z).length()
 	var speed_ratio: float = clamp(horizontal_speed / SPEED, 0.6, 1.8)
 	var is_moving := horizontal_speed > WALK_ANIM_THRESHOLD
-	_play_locomotion_anim(is_moving, speed_ratio, -input_dir.y)
+	_play_locomotion_anim(is_moving, speed_ratio)
 	_target_model_yaw_offset = _model_yaw_from_local_dir(input_dir) if is_moving else 0.0
 
 	var horizontal := Vector2(global_position.x, global_position.z)
