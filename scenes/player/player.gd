@@ -118,7 +118,7 @@ func _play_locomotion_anim(is_moving: bool, speed_ratio: float = 1.0) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_local_player or not match_active or stagger_timer > 0.0:
 		return
-	if (event.is_action_pressed("attack_melee") or event.is_action_pressed("attack_ranged")) and attack_ready:
+	if event.is_action_pressed("ability_basic") and attack_ready:
 		_do_basic_attack()
 
 func _physics_process(delta: float) -> void:
