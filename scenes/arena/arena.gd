@@ -10,6 +10,8 @@ const PLAYER_SCENE: PackedScene = preload("res://scenes/player/Player.tscn")
 @onready var hp_bar_p2: ChevronBar = $HUD/HUDRoot/HpGroupP2/HpBarWrapP2/HpBarP2
 @onready var hp_label_p1: Label = $HUD/HUDRoot/HpGroupP1/HpLabelP1
 @onready var hp_label_p2: Label = $HUD/HUDRoot/HpGroupP2/HpLabelP2
+@onready var element_label_p1: Label = $HUD/HUDRoot/ElementLabelP1
+@onready var element_label_p2: Label = $HUD/HUDRoot/ElementLabelP2
 @onready var winner_label: Label = $HUD/HUDRoot/WinnerLabel
 @onready var menu_button: Button = $HUD/HUDRoot/MenuButton
 @onready var waiting_label: Label = $HUD/HUDRoot/WaitingLabel
@@ -103,6 +105,8 @@ func _spawn_player(id: int, spawn_position: Vector3, is_first: bool, element: El
 	var hp_bar := hp_bar_p1 if is_first else hp_bar_p2
 	var hp_label := hp_label_p1 if is_first else hp_label_p2
 	_wire_player(player, hp_bar, hp_label)
+	var element_label := element_label_p1 if is_first else element_label_p2
+	element_label.text = ElementType.display_name(element)
 	if is_first:
 		player_one = player
 	else:
