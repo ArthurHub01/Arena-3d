@@ -22,6 +22,8 @@ const WALK_ANIM_THRESHOLD := 0.3
 const AI_MELEE_PREFERRED_RANGE := 2.0
 const AI_RANGED_PREFERRED_RANGE := 8.0
 const AI_RANGE_BUFFER := 1.5
+const AI_MISS_CHANCE := 0.3
+const AI_AIM_SPREAD_DEGREES := 14.0
 
 const ANIM_IDLE := "Human Armature|Idle"
 const ANIM_WALK := "Human Armature|Walk"
@@ -221,15 +223,19 @@ func _do_basic_attack() -> void:
 	if multiplayer.has_multiplayer_peer():
 		_show_attack_anim.rpc(anim)
 
-	match basic_ability.delivery:
-		AbilityData.Delivery.MELEE:
-			_execute_melee()
-		AbilityData.Delivery.PROJECTILE:
-			_execute_projectile()
-		AbilityData.Delivery.HITSCAN:
-			_execute_hitscan()
+	if not (is_ai_controlled and randf() < AI_MISS_CHANCE):
+		match basic_ability.delivery:
+			AbilityData.Delivery.MELEE:
+				_execute_melee()
+			AbilityData.Delivery.PROJECTILE:
+				_execute_projectile()
+			AbilityData.Delivery.HITSCAN:
+				_execute_hitscan()
 
 	get_tree().create_timer(basic_ability.cooldown).timeout.connect(func(): attack_ready = true)
+
+func _ai_aim_spread_rad() -> float:
+	return deg_to_rad(randf_range(-AI_AIM_SPREAD_DEGREES, AI_AIM_SPREAD_DEGREES))
 
 @rpc("unreliable_ordered", "call_remote")
 func _show_attack_anim(anim: String) -> void:
@@ -253,11 +259,16 @@ func _execute_projectile() -> void:
 	projectile.shooter = self
 	get_parent().add_child(projectile)
 	projectile.global_transform = muzzle_point.global_transform
+	if is_ai_controlled:
+		projectile.rotate_y(_ai_aim_spread_rad())
 
 func _execute_hitscan() -> void:
 	var space_state := get_world_3d().direct_space_state
 	var from := muzzle_point.global_position
-	var to := from - global_transform.basis.z * basic_ability.hitscan_range
+	var aim_dir := -global_transform.basis.z
+	if is_ai_controlled:
+		aim_dir = aim_dir.rotated(Vector3.UP, _ai_aim_spread_rad())
+	var to := from + aim_dir * basic_ability.hitscan_range
 	var query := PhysicsRayQueryParameters3D.create(from, to, 2)
 	query.exclude = [self]
 	var result := space_state.intersect_ray(query)
