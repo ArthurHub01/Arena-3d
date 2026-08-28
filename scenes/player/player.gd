@@ -240,8 +240,16 @@ func take_damage(amount: int, element: ElementType.Type = ElementType.Type.NONE,
 	if multiplayer.has_multiplayer_peer():
 		if multiplayer.is_server():
 			_apply_damage.rpc(amount, element, knockback_dir, knockback_force, stagger_duration)
+		else:
+			_request_damage.rpc_id(1, amount, element, knockback_dir, knockback_force, stagger_duration)
 	else:
 		_apply_damage(amount, element, knockback_dir, knockback_force, stagger_duration)
+
+@rpc("any_peer", "reliable")
+func _request_damage(amount: int, element: ElementType.Type = ElementType.Type.NONE, knockback_dir: Vector3 = Vector3.ZERO, knockback_force: float = 0.0, stagger_duration: float = 0.0) -> void:
+	if not multiplayer.is_server():
+		return
+	_apply_damage.rpc(amount, element, knockback_dir, knockback_force, stagger_duration)
 
 @rpc("call_local", "reliable", "any_peer")
 func _apply_damage(amount: int, element: ElementType.Type = ElementType.Type.NONE, knockback_dir: Vector3 = Vector3.ZERO, knockback_force: float = 0.0, stagger_duration: float = 0.0) -> void:
