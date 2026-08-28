@@ -25,6 +25,12 @@ var projectile_ready: bool = true
 
 var projectile_scene: PackedScene = preload("res://scenes/player/Projectile.tscn")
 
+@rpc("unreliable_ordered", "call_remote")
+func _remote_update_transform(pos: Vector3, rot_y: float, pivot_rot_x: float) -> void:
+	global_position = pos
+	rotation.y = rot_y
+	camera_pivot.rotation.x = pivot_rot_x
+
 func _ready() -> void:
 	if not is_local_player:
 		camera.current = false
@@ -53,6 +59,8 @@ func _physics_process(delta: float) -> void:
 	velocity.x = direction.x * SPEED
 	velocity.z = direction.z * SPEED
 	move_and_slide()
+	if is_multiplayer_authority():
+		_remote_update_transform.rpc(global_position, rotation.y, camera_pivot.rotation.x)
 
 func _do_melee_attack() -> void:
 	melee_ready = false
@@ -71,6 +79,14 @@ func _do_ranged_attack() -> void:
 	get_tree().create_timer(PROJECTILE_COOLDOWN).timeout.connect(func(): projectile_ready = true)
 
 func take_damage(amount: int) -> void:
+	if multiplayer.has_multiplayer_peer():
+		if multiplayer.is_server():
+			_apply_damage.rpc(amount)
+	else:
+		_apply_damage(amount)
+
+@rpc("call_local", "reliable", "any_peer")
+func _apply_damage(amount: int) -> void:
 	stats.apply_damage(amount)
 	damaged.emit(stats.current_hp)
 	if stats.is_dead():

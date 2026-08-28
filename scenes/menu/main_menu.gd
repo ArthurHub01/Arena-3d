@@ -12,8 +12,18 @@ const ARENA_SCENE_PATH := "res://scenes/arena/Arena.tscn"
 func _ready() -> void:
 	host_button.pressed.connect(_on_host_pressed)
 	join_button.pressed.connect(_on_join_pressed)
+	_check_cmdline_autoconnect()
+
+func _check_cmdline_autoconnect() -> void:
+	for arg in OS.get_cmdline_user_args():
+		if arg == "--auto-host":
+			_on_host_pressed()
+		elif arg.begins_with("--auto-join="):
+			ip_input.text = arg.split("=", true, 1)[1]
+			_on_join_pressed()
 
 func _on_host_pressed() -> void:
+	NetworkState.is_host = true
 	status_label.text = "Hospedando na porta %d..." % PORT
 	get_tree().change_scene_to_file(ARENA_SCENE_PATH)
 
@@ -22,5 +32,7 @@ func _on_join_pressed() -> void:
 	if ip.is_empty():
 		status_label.text = "Digite o IP do host."
 		return
+	NetworkState.is_host = false
+	NetworkState.host_ip = ip
 	status_label.text = "Conectando a %s..." % ip
 	get_tree().change_scene_to_file(ARENA_SCENE_PATH)

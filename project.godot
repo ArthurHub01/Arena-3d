@@ -14,6 +14,10 @@ config/name="arena3d"
 run/main_scene="res://scenes/menu/MainMenu.tscn"
 config/features=PackedStringArray("4.3", "Forward Plus")
 
+[autoload]
+
+NetworkState="*res://autoloads/network_state.gd"
+
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/gut/plugin.cfg")
