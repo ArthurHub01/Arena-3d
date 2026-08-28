@@ -20,6 +20,10 @@ const CAMERA_LERP_SPEED := 6.0
 
 const WALK_ANIM_THRESHOLD := 0.3
 
+const ANIM_IDLE := "Human Armature|Idle"
+const ANIM_WALK := "Human Armature|Walk"
+const ANIM_PUNCH := "Human Armature|Punch"
+
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var camera: Camera3D = $CameraPivot/Camera3D
 @onready var muzzle_point: Marker3D = $MuzzlePoint
@@ -37,19 +41,53 @@ var projectile_scene: PackedScene = preload("res://scenes/player/Projectile.tscn
 
 @rpc("unreliable_ordered", "call_remote")
 func _remote_update_transform(pos: Vector3, rot_y: float) -> void:
-	var moved := pos.distance_to(global_position)
-	_play_locomotion_anim(moved > 0.01)
+	var delta_pos := pos - global_position
+	var moved := delta_pos.length()
+	if moved > 0.01:
+		var forward := Vector3(-sin(rot_y), 0, -cos(rot_y))
+		var forward_amount := delta_pos.normalized().dot(forward)
+		var speed_ratio: float = clamp(moved / (SPEED / 60.0), 0.5, 2.0)
+		_play_locomotion_anim(true, speed_ratio, forward_amount)
+	else:
+		_play_locomotion_anim(false, 0.0, 0.0)
 	global_position = pos
 	rotation.y = rot_y
 
 func _ready() -> void:
 	camera.current = is_local_player
-	anim_player.play("idle")
+	anim_player.play(ANIM_IDLE)
+	_apply_body_color()
 
-func _play_locomotion_anim(is_moving: bool) -> void:
-	var target_anim := "walk" if is_moving else "idle"
-	if anim_player.current_animation != target_anim:
-		anim_player.play(target_anim)
+func _apply_body_color() -> void:
+	var mesh_instance := _find_mesh_instance($ModelRoot)
+	if mesh_instance == null:
+		return
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.75, 0.58, 0.46, 1.0)
+	mat.roughness = 0.85
+	mesh_instance.material_override = mat
+
+func _find_mesh_instance(node: Node) -> MeshInstance3D:
+	if node is MeshInstance3D:
+		return node
+	for child in node.get_children():
+		var found := _find_mesh_instance(child)
+		if found != null:
+			return found
+	return null
+
+func _play_locomotion_anim(is_moving: bool, speed_ratio: float = 1.0, forward_amount: float = 1.0) -> void:
+	if anim_player.current_animation == ANIM_PUNCH and anim_player.is_playing():
+		return
+	if not is_moving:
+		if anim_player.current_animation != ANIM_IDLE:
+			anim_player.play(ANIM_IDLE)
+		anim_player.speed_scale = 1.0
+		return
+	if anim_player.current_animation != ANIM_WALK:
+		anim_player.play(ANIM_WALK)
+	var direction_sign := -1.0 if forward_amount < -0.3 else 1.0
+	anim_player.speed_scale = direction_sign * clamp(speed_ratio, 0.6, 1.8)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_local_player or not match_active:
@@ -81,7 +119,8 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 
 	var horizontal_speed := Vector2(velocity.x, velocity.z).length()
-	_play_locomotion_anim(horizontal_speed > WALK_ANIM_THRESHOLD)
+	var speed_ratio: float = clamp(horizontal_speed / SPEED, 0.6, 1.8)
+	_play_locomotion_anim(horizontal_speed > WALK_ANIM_THRESHOLD, speed_ratio, -input_dir.y)
 
 	var horizontal := Vector2(global_position.x, global_position.z)
 	if horizontal.length() > ARENA_RADIUS:
@@ -112,10 +151,16 @@ func _update_combat_camera(delta: float) -> void:
 
 func _do_melee_attack() -> void:
 	melee_ready = false
+	anim_player.play(ANIM_PUNCH)
+	_show_attack_anim.rpc()
 	for body in melee_area.get_overlapping_bodies():
 		if body is Player and body != self:
 			body.take_damage(MELEE_DAMAGE)
 	get_tree().create_timer(MELEE_COOLDOWN).timeout.connect(func(): melee_ready = true)
+
+@rpc("unreliable_ordered", "call_remote")
+func _show_attack_anim() -> void:
+	anim_player.play(ANIM_PUNCH)
 
 func _do_ranged_attack() -> void:
 	projectile_ready = false
