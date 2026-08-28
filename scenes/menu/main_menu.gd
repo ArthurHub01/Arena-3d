@@ -8,10 +8,13 @@ const ARENA_SCENE_PATH := "res://scenes/arena/Arena.tscn"
 @onready var ip_input: LineEdit = $VBoxContainer/HBoxContainer/IpInput
 @onready var join_button: Button = $VBoxContainer/HBoxContainer/JoinButton
 @onready var status_label: Label = $VBoxContainer/StatusLabel
+@onready var version_label: Label = $VersionLabel
 
 func _ready() -> void:
 	host_button.pressed.connect(_on_host_pressed)
 	join_button.pressed.connect(_on_join_pressed)
+	version_label.text = GameVersion.VERSION
+	get_window().title = "Arena 3D - %s" % GameVersion.VERSION
 	_check_cmdline_autoconnect()
 
 func _check_cmdline_autoconnect() -> void:
