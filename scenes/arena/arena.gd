@@ -8,6 +8,9 @@ const PLAYER_SCENE: PackedScene = preload("res://scenes/player/Player.tscn")
 @onready var hp_bar_p1: ProgressBar = $HUD/HpBarP1
 @onready var hp_bar_p2: ProgressBar = $HUD/HpBarP2
 @onready var winner_label: Label = $HUD/WinnerLabel
+@onready var menu_button: Button = $HUD/MenuButton
+
+const MAIN_MENU_SCENE_PATH := "res://scenes/menu/MainMenu.tscn"
 
 var round_manager: RoundManager = RoundManager.new()
 var player_one: Player
@@ -16,7 +19,9 @@ var round_over: bool = false
 var players_by_id: Dictionary = {}
 
 func _ready() -> void:
+	menu_button.theme = UiTheme.build()
 	winner_label.hide()
+	menu_button.pressed.connect(_on_menu_button_pressed)
 	if NetworkState.is_host:
 		var peer := ENetMultiplayerPeer.new()
 		var err := peer.create_server(NetworkState.PORT, NetworkState.MAX_PLAYERS)
@@ -103,3 +108,9 @@ func _do_reset() -> void:
 	player_two.reset_player(spawn_p2.global_position)
 	round_over = false
 	winner_label.hide()
+
+func _on_menu_button_pressed() -> void:
+	if multiplayer.multiplayer_peer != null:
+		multiplayer.multiplayer_peer.close()
+		multiplayer.multiplayer_peer = null
+	get_tree().change_scene_to_file(MAIN_MENU_SCENE_PATH)

@@ -127,3 +127,13 @@ offset_right = 200.0
 offset_bottom = 20.0
 horizontal_alignment = 1
 text = "Vencedor"
+
+[node name="MenuButton" type="Button" parent="HUD"]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -48.0
+offset_top = 20.0
+offset_right = 48.0
+offset_bottom = 46.0
+theme_override_font_sizes/font_size = 14
+text = "MENU"
