@@ -4,17 +4,25 @@ class_name MainMenu
 const PORT := 8910
 const ARENA_SCENE_PATH := "res://scenes/arena/Arena.tscn"
 
-@onready var host_button: Button = $VBoxContainer/HostButton
-@onready var ip_input: LineEdit = $VBoxContainer/HBoxContainer/IpInput
-@onready var join_button: Button = $VBoxContainer/HBoxContainer/JoinButton
-@onready var status_label: Label = $VBoxContainer/StatusLabel
+@onready var host_button: Button = $CenterContainer/Panel/HostButton
+@onready var ip_input: LineEdit = $CenterContainer/Panel/HBoxContainer/IpInput
+@onready var join_button: Button = $CenterContainer/Panel/HBoxContainer/JoinButton
+@onready var status_label: Label = $CenterContainer/Panel/StatusLabel
 @onready var version_label: Label = $VersionLabel
-@onready var update_button: Button = $VBoxContainer/UpdateButton
+@onready var update_button: Button = $CenterContainer/Panel/UpdateButton
+@onready var title_label: Label = $CenterContainer/Panel/Title
+@onready var eyebrow_label: Label = $CenterContainer/Panel/Eyebrow
+@onready var divider_label: Label = $CenterContainer/Panel/Divider
 
 var updater: GameUpdater
 var pending_download_url := ""
 
 func _ready() -> void:
+	theme = UiTheme.build()
+	title_label.add_theme_font_override("font", UiTheme.title_font())
+	eyebrow_label.add_theme_font_override("font", UiTheme.eyebrow_font())
+	divider_label.add_theme_font_override("font", UiTheme.eyebrow_font())
+
 	host_button.pressed.connect(_on_host_pressed)
 	join_button.pressed.connect(_on_join_pressed)
 	update_button.pressed.connect(_on_update_button_pressed)
