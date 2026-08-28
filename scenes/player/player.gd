@@ -18,6 +18,9 @@ const CAMERA_HEIGHT := 2.4
 const LOOK_HEIGHT := 1.3
 const CAMERA_LERP_SPEED := 6.0
 
+const MODEL_BASE_ROTATION := PI
+const MODEL_TURN_LERP_SPEED := 10.0
+
 const WALK_ANIM_THRESHOLD := 0.3
 
 const ANIM_IDLE := "Human Armature|Idle"
@@ -29,6 +32,7 @@ const ANIM_PUNCH := "Human Armature|Punch"
 @onready var muzzle_point: Marker3D = $MuzzlePoint
 @onready var melee_area: Area3D = $MeleeHitPoint/MeleeArea
 @onready var anim_player: AnimationPlayer = $ModelRoot/CharacterModel/AnimationPlayer
+@onready var model_root: Node3D = $ModelRoot
 
 var stats: CombatStats = CombatStats.new()
 var is_local_player: bool = true
@@ -36,6 +40,8 @@ var opponent: Player = null
 var match_active: bool = false
 var melee_ready: bool = true
 var projectile_ready: bool = true
+var _model_yaw_offset: float = 0.0
+var _target_model_yaw_offset: float = 0.0
 
 var projectile_scene: PackedScene = preload("res://scenes/player/Projectile.tscn")
 
@@ -48,8 +54,11 @@ func _remote_update_transform(pos: Vector3, rot_y: float) -> void:
 		var forward_amount := delta_pos.normalized().dot(forward)
 		var speed_ratio: float = clamp(moved / (SPEED / 60.0), 0.5, 2.0)
 		_play_locomotion_anim(true, speed_ratio, forward_amount)
+		var local_delta := delta_pos.rotated(Vector3.UP, -rot_y)
+		_target_model_yaw_offset = _model_yaw_from_local_dir(Vector2(local_delta.x, local_delta.z))
 	else:
 		_play_locomotion_anim(false, 0.0, 0.0)
+		_target_model_yaw_offset = 0.0
 	global_position = pos
 	rotation.y = rot_y
 
@@ -57,6 +66,16 @@ func _ready() -> void:
 	camera.current = is_local_player
 	anim_player.play(ANIM_IDLE)
 	_apply_body_color()
+
+func _process(delta: float) -> void:
+	var lerp_amount: float = clamp(MODEL_TURN_LERP_SPEED * delta, 0.0, 1.0)
+	_model_yaw_offset = lerp_angle(_model_yaw_offset, _target_model_yaw_offset, lerp_amount)
+	model_root.rotation.y = MODEL_BASE_ROTATION + _model_yaw_offset
+
+func _model_yaw_from_local_dir(local_dir: Vector2) -> float:
+	if local_dir.length() < 0.001:
+		return 0.0
+	return atan2(-local_dir.x, -local_dir.y)
 
 func _apply_body_color() -> void:
 	var mesh_instance := _find_mesh_instance($ModelRoot)
@@ -120,7 +139,9 @@ func _physics_process(delta: float) -> void:
 
 	var horizontal_speed := Vector2(velocity.x, velocity.z).length()
 	var speed_ratio: float = clamp(horizontal_speed / SPEED, 0.6, 1.8)
-	_play_locomotion_anim(horizontal_speed > WALK_ANIM_THRESHOLD, speed_ratio, -input_dir.y)
+	var is_moving := horizontal_speed > WALK_ANIM_THRESHOLD
+	_play_locomotion_anim(is_moving, speed_ratio, -input_dir.y)
+	_target_model_yaw_offset = _model_yaw_from_local_dir(input_dir) if is_moving else 0.0
 
 	var horizontal := Vector2(global_position.x, global_position.z)
 	if horizontal.length() > ARENA_RADIUS:
