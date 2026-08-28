@@ -7,6 +7,7 @@ signal died()
 const SPEED := 6.0
 const JUMP_VELOCITY := 4.5
 const GRAVITY := 9.8
+const ARENA_RADIUS := 9.4
 const MELEE_DAMAGE := 15
 const MELEE_COOLDOWN := 0.6
 const PROJECTILE_DAMAGE := 10
@@ -58,6 +59,13 @@ func _physics_process(delta: float) -> void:
 	velocity.x = direction.x * SPEED
 	velocity.z = direction.z * SPEED
 	move_and_slide()
+
+	var horizontal := Vector2(global_position.x, global_position.z)
+	if horizontal.length() > ARENA_RADIUS:
+		horizontal = horizontal.normalized() * ARENA_RADIUS
+		global_position.x = horizontal.x
+		global_position.z = horizontal.y
+
 	if is_multiplayer_authority():
 		_remote_update_transform.rpc(global_position, rotation.y, camera_pivot.rotation.x)
 
