@@ -9,12 +9,30 @@ const ARENA_SCENE_PATH := "res://scenes/arena/Arena.tscn"
 @onready var join_button: Button = $VBoxContainer/HBoxContainer/JoinButton
 @onready var status_label: Label = $VBoxContainer/StatusLabel
 @onready var version_label: Label = $VersionLabel
+@onready var update_button: Button = $VBoxContainer/UpdateButton
+
+var updater: GameUpdater
+var pending_download_url := ""
 
 func _ready() -> void:
 	host_button.pressed.connect(_on_host_pressed)
 	join_button.pressed.connect(_on_join_pressed)
-	version_label.text = GameVersion.VERSION
-	get_window().title = "Arena 3D - %s" % GameVersion.VERSION
+	update_button.pressed.connect(_on_update_button_pressed)
+
+	version_label.text = GameVersion.DISPLAY_NAME
+	get_window().title = "Arena 3D - %s" % GameVersion.DISPLAY_NAME
+
+	updater = GameUpdater.new()
+	add_child(updater)
+	updater.up_to_date.connect(_on_up_to_date)
+	updater.update_available.connect(_on_update_available)
+	updater.check_failed.connect(_on_check_failed)
+	updater.download_complete.connect(_on_download_complete)
+	updater.download_failed.connect(_on_download_failed)
+
+	update_button.text = "Verificar atualização"
+	updater.check_for_update()
+
 	_check_cmdline_autoconnect()
 
 func _check_cmdline_autoconnect() -> void:
@@ -39,3 +57,36 @@ func _on_join_pressed() -> void:
 	NetworkState.host_ip = ip
 	status_label.text = "Conectando a %s..." % ip
 	get_tree().change_scene_to_file(ARENA_SCENE_PATH)
+
+func _on_update_button_pressed() -> void:
+	if not pending_download_url.is_empty():
+		update_button.disabled = true
+		update_button.text = "Baixando..."
+		updater.download_update(pending_download_url)
+	else:
+		update_button.disabled = true
+		update_button.text = "Verificando..."
+		updater.check_for_update()
+
+func _on_up_to_date() -> void:
+	update_button.text = "Já atualizado"
+	update_button.disabled = true
+
+func _on_update_available(version: String, download_url: String) -> void:
+	pending_download_url = download_url
+	update_button.text = "Atualizar (%s disponível)" % version
+	update_button.disabled = false
+
+func _on_check_failed(reason: String) -> void:
+	update_button.text = "Verificar atualização"
+	update_button.disabled = false
+	status_label.text = reason
+
+func _on_download_complete() -> void:
+	status_label.text = "Atualização baixada, reiniciando..."
+	updater.apply_update_and_restart()
+
+func _on_download_failed(reason: String) -> void:
+	update_button.text = "Tentar atualizar de novo"
+	update_button.disabled = false
+	status_label.text = reason

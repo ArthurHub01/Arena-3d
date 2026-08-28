@@ -1,4 +1,5 @@
 class_name GameVersion
 extends RefCounted
 
-const VERSION := "Beta 1.0"
+const VERSION := "v1.0.0"
+const DISPLAY_NAME := "Beta 1.0"
