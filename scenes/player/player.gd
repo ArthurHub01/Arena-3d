@@ -18,10 +18,13 @@ const CAMERA_HEIGHT := 2.4
 const LOOK_HEIGHT := 1.3
 const CAMERA_LERP_SPEED := 6.0
 
+const WALK_ANIM_THRESHOLD := 0.3
+
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var camera: Camera3D = $CameraPivot/Camera3D
 @onready var muzzle_point: Marker3D = $MuzzlePoint
 @onready var melee_area: Area3D = $MeleeHitPoint/MeleeArea
+@onready var anim_player: AnimationPlayer = $ModelRoot/CharacterModel/AnimationPlayer
 
 var stats: CombatStats = CombatStats.new()
 var is_local_player: bool = true
@@ -34,11 +37,19 @@ var projectile_scene: PackedScene = preload("res://scenes/player/Projectile.tscn
 
 @rpc("unreliable_ordered", "call_remote")
 func _remote_update_transform(pos: Vector3, rot_y: float) -> void:
+	var moved := pos.distance_to(global_position)
+	_play_locomotion_anim(moved > 0.01)
 	global_position = pos
 	rotation.y = rot_y
 
 func _ready() -> void:
 	camera.current = is_local_player
+	anim_player.play("idle")
+
+func _play_locomotion_anim(is_moving: bool) -> void:
+	var target_anim := "walk" if is_moving else "idle"
+	if anim_player.current_animation != target_anim:
+		anim_player.play(target_anim)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_local_player or not match_active:
@@ -68,6 +79,9 @@ func _physics_process(delta: float) -> void:
 	velocity.x = direction.x * SPEED
 	velocity.z = direction.z * SPEED
 	move_and_slide()
+
+	var horizontal_speed := Vector2(velocity.x, velocity.z).length()
+	_play_locomotion_anim(horizontal_speed > WALK_ANIM_THRESHOLD)
 
 	var horizontal := Vector2(global_position.x, global_position.z)
 	if horizontal.length() > ARENA_RADIUS:
