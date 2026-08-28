@@ -217,6 +217,12 @@ custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
 text = "HOSPEDAR"
 
+[node name="VsComputerButton" type="Button" parent="CenterContainer/Panel"]
+custom_minimum_size = Vector2(0, 38)
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "JOGAR CONTRA O COMPUTADOR"
+
 [node name="Divider" type="Label" parent="CenterContainer/Panel"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.55, 0.48, 0.40, 1)

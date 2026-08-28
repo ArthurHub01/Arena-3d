@@ -19,6 +19,10 @@ const MODEL_TURN_LERP_SPEED := 10.0
 
 const WALK_ANIM_THRESHOLD := 0.3
 
+const AI_MELEE_PREFERRED_RANGE := 2.0
+const AI_RANGED_PREFERRED_RANGE := 8.0
+const AI_RANGE_BUFFER := 1.5
+
 const ANIM_IDLE := "Human Armature|Idle"
 const ANIM_WALK := "Human Armature|Walk"
 const ANIM_PUNCH := "Human Armature|Punch"
@@ -32,6 +36,7 @@ const ANIM_PUNCH := "Human Armature|Punch"
 
 var stats: CombatStats = CombatStats.new()
 var is_local_player: bool = true
+var is_ai_controlled: bool = false
 var opponent: Player = null
 var match_active: bool = false
 var equipped_element: ElementType.Type = ElementType.Type.FIRE
@@ -117,7 +122,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		_do_basic_attack()
 
 func _physics_process(delta: float) -> void:
-	if not is_local_player or not match_active:
+	if not (is_local_player or is_ai_controlled) or not match_active:
 		return
 
 	if stagger_timer > 0.0:
@@ -128,7 +133,7 @@ func _physics_process(delta: float) -> void:
 			velocity.y -= GRAVITY * delta
 		move_and_slide()
 		_play_locomotion_anim(false)
-		if is_multiplayer_authority():
+		if is_multiplayer_authority() and multiplayer.has_multiplayer_peer():
 			_remote_update_transform.rpc(global_position, rotation.y)
 		return
 
@@ -141,9 +146,16 @@ func _physics_process(delta: float) -> void:
 
 	if not is_on_floor():
 		velocity.y -= GRAVITY * delta
-	if Input.is_action_just_pressed("jump") and is_on_floor():
+	if not is_ai_controlled and Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = JUMP_VELOCITY
-	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+
+	var input_dir: Vector2
+	if is_ai_controlled:
+		input_dir = _ai_decide_movement()
+		_ai_maybe_attack()
+	else:
+		input_dir = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+
 	var direction := (transform.basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()
 	velocity.x = direction.x * SPEED
 	velocity.z = direction.z * SPEED
@@ -161,11 +173,31 @@ func _physics_process(delta: float) -> void:
 		global_position.x = horizontal.x
 		global_position.z = horizontal.y
 
-	if has_opponent:
+	if has_opponent and is_local_player:
 		_update_combat_camera(delta)
 
-	if is_multiplayer_authority():
+	if is_multiplayer_authority() and multiplayer.has_multiplayer_peer():
 		_remote_update_transform.rpc(global_position, rotation.y)
+
+func _ai_decide_movement() -> Vector2:
+	if not is_instance_valid(opponent):
+		return Vector2.ZERO
+	var preferred := AI_MELEE_PREFERRED_RANGE if basic_ability.delivery == AbilityData.Delivery.MELEE else AI_RANGED_PREFERRED_RANGE
+	var distance := global_position.distance_to(opponent.global_position)
+	if distance > preferred + AI_RANGE_BUFFER:
+		return Vector2(0, -1)
+	elif distance < preferred - AI_RANGE_BUFFER and basic_ability.delivery != AbilityData.Delivery.MELEE:
+		return Vector2(0, 1)
+	else:
+		return Vector2(sin(Time.get_ticks_msec() * 0.0015), 0)
+
+func _ai_maybe_attack() -> void:
+	if not attack_ready or not is_instance_valid(opponent):
+		return
+	var preferred := AI_MELEE_PREFERRED_RANGE if basic_ability.delivery == AbilityData.Delivery.MELEE else AI_RANGED_PREFERRED_RANGE
+	var distance := global_position.distance_to(opponent.global_position)
+	if distance <= preferred + AI_RANGE_BUFFER:
+		_do_basic_attack()
 
 func _update_combat_camera(delta: float) -> void:
 	var mid := (global_position + opponent.global_position) / 2.0
@@ -186,7 +218,8 @@ func _do_basic_attack() -> void:
 	attack_ready = false
 	var anim := basic_ability.anim_name if not basic_ability.anim_name.is_empty() else ANIM_PUNCH
 	anim_player.play(anim)
-	_show_attack_anim.rpc(anim)
+	if multiplayer.has_multiplayer_peer():
+		_show_attack_anim.rpc(anim)
 
 	match basic_ability.delivery:
 		AbilityData.Delivery.MELEE:

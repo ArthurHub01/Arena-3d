@@ -5,6 +5,7 @@ const PORT := 8910
 const ARENA_SCENE_PATH := "res://scenes/arena/Arena.tscn"
 
 @onready var host_button: Button = $CenterContainer/Panel/HostButton
+@onready var vs_computer_button: Button = $CenterContainer/Panel/VsComputerButton
 @onready var ip_input: LineEdit = $CenterContainer/Panel/HBoxContainer/IpInput
 @onready var join_button: Button = $CenterContainer/Panel/HBoxContainer/JoinButton
 @onready var status_label: Label = $CenterContainer/Panel/StatusLabel
@@ -29,6 +30,7 @@ func _ready() -> void:
 	element_label.add_theme_font_override("font", UiTheme.eyebrow_font())
 
 	host_button.pressed.connect(_on_host_pressed)
+	vs_computer_button.pressed.connect(_on_vs_computer_pressed)
 	join_button.pressed.connect(_on_join_pressed)
 	update_button.pressed.connect(_on_update_button_pressed)
 
@@ -70,10 +72,17 @@ func _check_cmdline_autoconnect() -> void:
 		elif arg.begins_with("--auto-join="):
 			ip_input.text = arg.split("=", true, 1)[1]
 			_on_join_pressed()
+		elif arg == "--vs-computer":
+			_on_vs_computer_pressed()
 
 func _on_host_pressed() -> void:
 	NetworkState.is_host = true
 	status_label.text = "Hospedando na porta %d..." % PORT
+	get_tree().change_scene_to_file(ARENA_SCENE_PATH)
+
+func _on_vs_computer_pressed() -> void:
+	NetworkState.vs_computer = true
+	NetworkState.is_host = false
 	get_tree().change_scene_to_file(ARENA_SCENE_PATH)
 
 func _on_join_pressed() -> void:

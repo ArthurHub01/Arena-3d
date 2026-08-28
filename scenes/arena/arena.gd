@@ -27,7 +27,9 @@ func _ready() -> void:
 	winner_label.hide()
 	waiting_label.hide()
 	menu_button.pressed.connect(_on_menu_button_pressed)
-	if NetworkState.is_host:
+	if NetworkState.vs_computer:
+		_start_vs_computer()
+	elif NetworkState.is_host:
 		var peer := ENetMultiplayerPeer.new()
 		var err := peer.create_server(NetworkState.PORT, NetworkState.MAX_PLAYERS)
 		if err != OK:
@@ -47,6 +49,14 @@ func _ready() -> void:
 			return
 		multiplayer.multiplayer_peer = peer
 		multiplayer.connected_to_server.connect(_on_connected_to_server)
+
+func _start_vs_computer() -> void:
+	_spawn_player(1, spawn_p1.global_position, true, NetworkState.selected_element)
+	var ai_elements := [ElementType.Type.FIRE, ElementType.Type.WATER, ElementType.Type.EARTH, ElementType.Type.AIR, ElementType.Type.LIGHTNING]
+	ai_elements.erase(NetworkState.selected_element)
+	var ai_element: ElementType.Type = ai_elements[randi() % ai_elements.size()] if not ai_elements.is_empty() else NetworkState.selected_element
+	_spawn_player(2, spawn_p2.global_position, false, ai_element)
+	player_two.is_ai_controlled = true
 
 func _on_connected_to_server() -> void:
 	_report_element.rpc_id(1, NetworkState.selected_element)
@@ -135,9 +145,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		_reset_round()
 
 func _reset_round() -> void:
-	if not multiplayer.is_server():
-		return
-	_do_reset.rpc()
+	if multiplayer.has_multiplayer_peer():
+		if not multiplayer.is_server():
+			return
+		_do_reset.rpc()
+	else:
+		_do_reset()
 
 @rpc("call_local", "reliable")
 func _do_reset() -> void:
@@ -150,4 +163,5 @@ func _on_menu_button_pressed() -> void:
 	if multiplayer.multiplayer_peer != null:
 		multiplayer.multiplayer_peer.close()
 		multiplayer.multiplayer_peer = null
+	NetworkState.vs_computer = false
 	get_tree().change_scene_to_file(MAIN_MENU_SCENE_PATH)
