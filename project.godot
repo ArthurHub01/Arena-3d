@@ -13,6 +13,11 @@ config_version=5
 config/name="arena3d"
 run/main_scene="res://scenes/menu/MainMenu.tscn"
 config/features=PackedStringArray("4.3", "Forward Plus")
+config/icon="res://assets/icon.png"
+boot_splash/bg_color=Color(0.043, 0.043, 0.043, 1)
+boot_splash/image="res://assets/icon.png"
+boot_splash/fullsize=false
+boot_splash/use_filter=true
 
 [autoload]
 
