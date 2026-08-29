@@ -406,3 +406,81 @@ static func play_teleport(parent: Node, old_pos: Vector3, new_pos: Vector3, colo
 	_spawn_ring(parent, old_pos, color, 1.3, 0.25, 0.12)
 	VFX.spawn_light_flash(parent, new_pos, color, 7.0, 3.0, 0.18)
 	_spawn_jagged_beam(parent, old_pos, new_pos, color, 5, 0.6, 0.025, 0.12)
+
+# ---------------------------------------------------------------------------
+# Block stance — persistent per-element visual while holding block (right
+# click, no direction held). Started when blocking begins, stopped when it
+# ends, regardless of how long the player holds it.
+# ---------------------------------------------------------------------------
+
+const _BLOCK_VORTEX_DURATION := 999.0  # effectively indefinite; stop_block_stance() cuts it short manually
+
+static func _spawn_static_dome(follow_node: Node3D, color: Color) -> MeshInstance3D:
+	var mesh_inst := MeshInstance3D.new()
+	var mesh := SphereMesh.new()
+	mesh.radius = 1.15
+	mesh.height = 1.15 * 2.0
+	mesh.radial_segments = 24
+	mesh.rings = 12
+	var mat := _mat(color, 1.2, 0.22)
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mesh.material = mat
+	mesh_inst.mesh = mesh
+	follow_node.add_child(mesh_inst)
+	mesh_inst.position = Vector3(0, 1.0, 0)
+	return mesh_inst
+
+static func _spawn_earth_wall_shell(follow_node: Node3D, color: Color) -> MeshInstance3D:
+	var mesh_inst := MeshInstance3D.new()
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = 0.85
+	mesh.bottom_radius = 0.95
+	mesh.height = 1.6
+	mesh.radial_segments = 10
+	mesh.material = rock_material(color.darkened(0.1))
+	mesh_inst.mesh = mesh
+	follow_node.add_child(mesh_inst)
+	mesh_inst.position = Vector3(0, 0.9, 0)
+	return mesh_inst
+
+## Returns a handle (Dictionary) to pass into stop_block_stance() later.
+static func start_block_stance(element: ElementType.Type, player: Node3D) -> Dictionary:
+	var color := ElementType.get_color(element)
+	var handle := {"particles": null, "mesh": null}
+	match element:
+		ElementType.Type.FIRE:
+			var particles := _spawn_vortex(player, Vector3(0, 1.0, 0), color, 0.7, 2.5, _BLOCK_VORTEX_DURATION, 0.07, 0.9)
+			particles.position = Vector3(0, 1.0, 0)
+			handle["particles"] = particles
+		ElementType.Type.WATER:
+			var particles := _spawn_vortex(player, Vector3(0, 1.0, 0), color, 0.9, 0.8, _BLOCK_VORTEX_DURATION, 0.04, 0.2)
+			particles.position = Vector3(0, 1.0, 0)
+			handle["particles"] = particles
+		ElementType.Type.EARTH:
+			handle["mesh"] = _spawn_earth_wall_shell(player, color)
+			var particles := _spawn_vortex(player, Vector3(0, 1.0, 0), color.darkened(0.1), 0.9, 0.6, _BLOCK_VORTEX_DURATION, 0.08, 0.05)
+			particles.position = Vector3(0, 1.0, 0)
+			handle["particles"] = particles
+		ElementType.Type.AIR:
+			handle["mesh"] = _spawn_static_dome(player, color)
+		ElementType.Type.LIGHTNING:
+			var particles := _spawn_vortex(player, Vector3(0, 1.0, 0), color, 0.8, 4.0, _BLOCK_VORTEX_DURATION, 0.03, 0.6)
+			particles.position = Vector3(0, 1.0, 0)
+			handle["particles"] = particles
+	return handle
+
+static func stop_block_stance(handle: Dictionary) -> void:
+	var particles: GPUParticles3D = handle.get("particles")
+	if is_instance_valid(particles):
+		particles.emitting = false
+		var tree := particles.get_tree()
+		if tree:
+			tree.create_timer(particles.lifetime + 0.1).timeout.connect(func():
+				if is_instance_valid(particles):
+					particles.queue_free()
+			)
+		else:
+			particles.queue_free()
+	var mesh_inst: MeshInstance3D = handle.get("mesh")
+	if is_instance_valid(mesh_inst):
+		mesh_inst.queue_free()

@@ -89,7 +89,17 @@ var _last_attack_family: String = ""
 var _attack_awaiting_second: bool = false
 var _combo_window_timer: float = 0.0
 
-var is_blocking: bool = false
+var is_blocking: bool = false:
+	set(value):
+		if value == is_blocking:
+			return
+		is_blocking = value
+		if value:
+			_block_vfx_handle = AbilityVFX.start_block_stance(equipped_element, self)
+		else:
+			AbilityVFX.stop_block_stance(_block_vfx_handle)
+			_block_vfx_handle = {}
+var _block_vfx_handle: Dictionary = {}
 var is_invincible: bool = false
 var _invincible_timer: float = 0.0
 var _dodge_dir: Vector3 = Vector3.ZERO
