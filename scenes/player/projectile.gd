@@ -10,11 +10,20 @@ var shooter: Player = null
 var lifetime: float = 3.0
 var vfx_key: String = ""
 
+## True for the purely-visual replica spawned on the other peer's screen
+## (see Player._show_projectile_vfx) — flies and looks identical, but
+## never applies damage/knockback/special-meter itself since the real
+## projectile on the caster's machine already did that via take_damage's RPC.
+var cosmetic_only: bool = false
+
 @onready var mesh_instance: MeshInstance3D = $MeshInstance3D
 @onready var trail_particles: GPUParticles3D = $TrailParticles
 
 func _ready() -> void:
-	body_entered.connect(_on_body_entered)
+	if cosmetic_only:
+		monitoring = false
+	else:
+		body_entered.connect(_on_body_entered)
 	get_tree().create_timer(lifetime).timeout.connect(queue_free)
 	_apply_element_look()
 

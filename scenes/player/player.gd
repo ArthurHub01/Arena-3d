@@ -402,9 +402,13 @@ func _fire_attack(ability: AbilityData) -> void:
 	attack_ready = false
 	var anim := ability.anim_name if not ability.anim_name.is_empty() else ANIM_PUNCH
 	anim_player.play(anim)
-	AbilityVFX.play_cast(ability, get_parent(), muzzle_point.global_position, -global_transform.basis.z, global_position + Vector3(0, 1.0, 0))
+	var muzzle_pos := muzzle_point.global_position
+	var forward := -global_transform.basis.z
+	var body_pos := global_position + Vector3(0, 1.0, 0)
+	AbilityVFX.play_cast(ability, get_parent(), muzzle_pos, forward, body_pos)
 	if multiplayer.has_multiplayer_peer():
 		_show_attack_anim.rpc(anim)
+		_show_cast_vfx.rpc(ability.vfx_key, ability.element, ability.aoe_range, muzzle_pos, forward, body_pos)
 
 	if ability.cast_time > 0.0:
 		await get_tree().create_timer(ability.cast_time).timeout
@@ -445,6 +449,54 @@ func _ai_aim_spread_rad() -> float:
 func _show_attack_anim(anim: String) -> void:
 	anim_player.play(anim)
 
+## Networked replicas of the AbilityVFX.play_* calls below, so the bespoke
+## per-ability visuals show up for the opponent's peer too, not just the
+## caster. Only vfx_key/element/aoe_range cross the wire (plain data types
+## RPC can serialize safely) — a throwaway AbilityData stub is rebuilt on
+## the receiving end instead of sending the whole Resource over RPC.
+@rpc("unreliable_ordered", "call_remote")
+func _show_cast_vfx(vfx_key: String, element: ElementType.Type, aoe_range: float, muzzle_pos: Vector3, forward: Vector3, body_pos: Vector3) -> void:
+	var stub := AbilityData.new()
+	stub.vfx_key = vfx_key
+	stub.element = element
+	stub.aoe_range = aoe_range
+	AbilityVFX.play_cast(stub, get_parent(), muzzle_pos, forward, body_pos)
+
+@rpc("unreliable_ordered", "call_remote")
+func _show_landed_vfx(vfx_key: String, element: ElementType.Type, target_pos: Vector3) -> void:
+	var stub := AbilityData.new()
+	stub.vfx_key = vfx_key
+	stub.element = element
+	AbilityVFX.play_landed(stub, get_parent(), target_pos)
+
+@rpc("unreliable_ordered", "call_remote")
+func _show_beam_vfx(vfx_key: String, element: ElementType.Type, from: Vector3, to: Vector3) -> void:
+	var stub := AbilityData.new()
+	stub.vfx_key = vfx_key
+	stub.element = element
+	AbilityVFX.play_beam(stub, get_parent(), from, to)
+
+@rpc("unreliable_ordered", "call_remote")
+func _show_self_buff_vfx(vfx_key: String, element: ElementType.Type, self_buff_type: String, self_buff_duration: float) -> void:
+	var stub := AbilityData.new()
+	stub.vfx_key = vfx_key
+	stub.element = element
+	stub.self_buff_type = self_buff_type
+	stub.self_buff_duration = self_buff_duration
+	AbilityVFX.play_self_buff(stub, self)
+
+@rpc("unreliable_ordered", "call_remote")
+func _show_wall_cast_vfx(position: Vector3, element: ElementType.Type) -> void:
+	AbilityVFX.play_wall_cast(get_parent(), position, ElementType.get_color(element))
+
+@rpc("unreliable_ordered", "call_remote")
+func _show_teleport_vfx(old_pos: Vector3, new_pos: Vector3, element: ElementType.Type) -> void:
+	AbilityVFX.play_teleport(get_parent(), old_pos, new_pos, ElementType.get_color(element))
+
+@rpc("unreliable_ordered", "call_remote")
+func _show_burn_tick_vfx(position: Vector3) -> void:
+	AbilityVFX.play_burn_tick(get_parent(), position)
+
 func _execute_melee(ability: AbilityData) -> bool:
 	melee_area.get_child(0).shape.radius = ability.melee_range
 	var hit := false
@@ -455,6 +507,10 @@ func _execute_melee(ability: AbilityData) -> bool:
 				body.is_blocking = false
 			body.take_damage(ability.damage, ability.element, dir, ability.knockback_force, ability.stagger_duration)
 			_gain_special_meter()
+			var landed_pos := body.global_position + Vector3(0, 1.0, 0)
+			AbilityVFX.play_landed(ability, get_parent(), landed_pos)
+			if multiplayer.has_multiplayer_peer():
+				_show_landed_vfx.rpc(ability.vfx_key, ability.element, landed_pos)
 			hit = true
 	return hit
 
@@ -472,6 +528,19 @@ func _execute_projectile(ability: AbilityData) -> void:
 	projectile.global_transform = muzzle_point.global_transform
 	if is_ai_controlled:
 		projectile.rotate_y(_ai_aim_spread_rad())
+	if multiplayer.has_multiplayer_peer():
+		_show_projectile_vfx.rpc(projectile.global_transform, ability.vfx_key, ability.element, ability.projectile_speed, ability.projectile_lifetime)
+
+@rpc("unreliable_ordered", "call_remote")
+func _show_projectile_vfx(proj_transform: Transform3D, vfx_key: String, element: ElementType.Type, speed: float, lifetime: float) -> void:
+	var projectile: Projectile = projectile_scene.instantiate()
+	projectile.element = element
+	projectile.vfx_key = vfx_key
+	projectile.speed = speed
+	projectile.lifetime = lifetime
+	projectile.cosmetic_only = true
+	get_parent().add_child(projectile)
+	projectile.global_transform = proj_transform
 
 func _execute_hitscan(ability: AbilityData) -> bool:
 	var from := muzzle_point.global_position
@@ -486,6 +555,8 @@ func _execute_hitscan(ability: AbilityData) -> bool:
 	var result := space_state.intersect_ray(query)
 	var beam_end: Vector3 = result.position if result else to
 	AbilityVFX.play_beam(ability, get_parent(), from, beam_end)
+	if multiplayer.has_multiplayer_peer():
+		_show_beam_vfx.rpc(ability.vfx_key, ability.element, from, beam_end)
 	if result and result.collider is Player and result.collider != self:
 		var target: Player = result.collider
 		var dir := (target.global_position - global_position)
@@ -513,6 +584,8 @@ func _execute_cone(ability: AbilityData) -> bool:
 	opponent.take_damage(ability.damage, ability.element, dir, ability.knockback_force, ability.stagger_duration)
 	_gain_special_meter()
 	AbilityVFX.play_landed(ability, get_parent(), opponent.global_position + Vector3(0, 1.0, 0))
+	if multiplayer.has_multiplayer_peer():
+		_show_landed_vfx.rpc(ability.vfx_key, ability.element, opponent.global_position + Vector3(0, 1.0, 0))
 	if ability.burn_ticks > 0:
 		_apply_burn(ability, opponent)
 	return true
@@ -532,10 +605,14 @@ func _execute_line(ability: AbilityData) -> bool:
 	opponent.take_damage(ability.damage, ability.element, dir, ability.knockback_force, ability.stagger_duration)
 	_gain_special_meter()
 	AbilityVFX.play_landed(ability, get_parent(), opponent.global_position + Vector3(0, 1.0, 0))
+	if multiplayer.has_multiplayer_peer():
+		_show_landed_vfx.rpc(ability.vfx_key, ability.element, opponent.global_position + Vector3(0, 1.0, 0))
 	return true
 
 func _execute_self_buff(ability: AbilityData) -> void:
 	AbilityVFX.play_self_buff(ability, self)
+	if multiplayer.has_multiplayer_peer():
+		_show_self_buff_vfx.rpc(ability.vfx_key, ability.element, ability.self_buff_type, ability.self_buff_duration)
 	match ability.self_buff_type:
 		"shield":
 			is_shielded = true
@@ -562,6 +639,8 @@ func _execute_self_buff(ability: AbilityData) -> void:
 func _execute_wall(ability: AbilityData) -> void:
 	var spawn_pos := global_position + Vector3(0, 1.0, 0) + (-global_transform.basis.z) * 3.0
 	AbilityVFX.play_wall_cast(get_parent(), spawn_pos, ElementType.get_color(ability.element))
+	if multiplayer.has_multiplayer_peer():
+		_show_wall_cast_vfx.rpc(spawn_pos, ability.element)
 	var arena := get_parent()
 	if multiplayer.has_multiplayer_peer():
 		arena._spawn_wall.rpc(spawn_pos, rotation.y, ability.wall_duration)
@@ -576,6 +655,8 @@ func _execute_teleport_strike(ability: AbilityData) -> bool:
 	global_position = opponent.global_position + behind_dir * 1.2
 	look_at(Vector3(opponent.global_position.x, global_position.y, opponent.global_position.z), Vector3.UP)
 	AbilityVFX.play_teleport(get_parent(), old_pos, global_position, ElementType.get_color(ability.element))
+	if multiplayer.has_multiplayer_peer():
+		_show_teleport_vfx.rpc(old_pos, global_position, ability.element)
 	var dir := opponent.global_position - global_position
 	opponent.take_damage(ability.damage, ability.element, dir, ability.knockback_force, ability.stagger_duration)
 	_gain_special_meter()
@@ -597,7 +678,10 @@ func _apply_burn(ability: AbilityData, target: Player) -> void:
 		await get_tree().create_timer(ability.burn_tick_interval).timeout
 		if not is_instance_valid(target):
 			return
-		AbilityVFX.play_burn_tick(get_parent(), target.global_position + Vector3(0, 1.0, 0))
+		var burn_pos := target.global_position + Vector3(0, 1.0, 0)
+		AbilityVFX.play_burn_tick(get_parent(), burn_pos)
+		if multiplayer.has_multiplayer_peer():
+			_show_burn_tick_vfx.rpc(burn_pos)
 		target.take_damage(ability.burn_damage_per_tick, ElementType.Type.FIRE)
 
 func take_damage(amount: int, element: ElementType.Type = ElementType.Type.NONE, knockback_dir: Vector3 = Vector3.ZERO, knockback_force: float = 0.0, stagger_duration: float = 0.0) -> void:
