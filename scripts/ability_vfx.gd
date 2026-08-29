@@ -434,12 +434,72 @@ static func _spawn_static_dome(follow_node: Node3D, color: Color) -> MeshInstanc
 ## individually jagged rock chunks — widest at the top, tapering to a point,
 ## echoing a hand-forged stone shield rather than a flat slab.
 const _EARTH_SHIELD_CHUNKS := [
-	Vector2(-0.5, 1.66), Vector2(0.0, 1.8), Vector2(0.5, 1.66),
-	Vector2(-0.82, 1.34), Vector2(-0.27, 1.42), Vector2(0.27, 1.42), Vector2(0.82, 1.34),
-	Vector2(-0.6, 1.0), Vector2(0.0, 1.08), Vector2(0.6, 1.0),
-	Vector2(-0.33, 0.68), Vector2(0.33, 0.68),
-	Vector2(0.0, 0.36),
+	Vector2(-0.46, 1.62), Vector2(0.0, 1.76), Vector2(0.46, 1.62),
+	Vector2(-0.74, 1.32), Vector2(-0.24, 1.4), Vector2(0.24, 1.4), Vector2(0.74, 1.32),
+	Vector2(-0.54, 1.0), Vector2(0.0, 1.06), Vector2(0.54, 1.0),
+	Vector2(-0.3, 0.68), Vector2(0.3, 0.68),
+	Vector2(0.0, 0.38),
 ]
+
+## Small pebbles seeded into the gaps between the main chunks so the front
+## reads as a packed shield surface instead of scattered blocks.
+const _EARTH_SHIELD_FILLER := [
+	Vector2(-0.25, 1.58), Vector2(0.25, 1.58), Vector2(-0.62, 1.18), Vector2(0.0, 1.24),
+	Vector2(0.62, 1.18), Vector2(-0.42, 0.85), Vector2(0.42, 0.85), Vector2(0.0, 0.55),
+]
+
+## Rock-chunk primitive shapes: box, wedge and squat cylinder, so the shield
+## isn't a uniform pile of bricks.
+static func _random_rock_mesh(size: float) -> Mesh:
+	var pick := randi() % 3
+	if pick == 0:
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3(size, size * randf_range(0.85, 1.1), size * randf_range(0.7, 0.95))
+		return mesh
+	elif pick == 1:
+		var mesh := PrismMesh.new()
+		mesh.size = Vector3(size, size * randf_range(0.85, 1.1), size * randf_range(0.7, 0.95))
+		mesh.left_to_right = randf_range(0.25, 0.75)
+		return mesh
+	else:
+		var mesh := CylinderMesh.new()
+		mesh.top_radius = size * randf_range(0.35, 0.5)
+		mesh.bottom_radius = size * randf_range(0.4, 0.55)
+		mesh.height = size * randf_range(0.7, 0.95)
+		mesh.radial_segments = 6
+		return mesh
+
+## A muted, slightly desaturated rock tone — mixes a few distinct shades
+## (not just one hue darkened/lightened) so it reads as several kinds of
+## stone pulled together, not one uniform block.
+static func _random_rock_color(base: Color) -> Color:
+	var tint: Color = [base, base.darkened(0.25), Color(0.42, 0.38, 0.34), base.darkened(0.1).lightened(0.05)][randi() % 4]
+	return tint.darkened(randf_range(0.0, 0.15))
+
+static func _spawn_rock_chunk(root: Node3D, tree: SceneTree, local_pos: Vector3, size: float, color: Color, delay: float) -> void:
+	var chunk := MeshInstance3D.new()
+	var mesh := _random_rock_mesh(size)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = _random_rock_color(color)
+	mat.roughness = randf_range(0.85, 1.0)
+	mat.metallic = 0.0
+	mesh.material = mat
+	chunk.mesh = mesh
+	root.add_child(chunk)
+
+	var final_rot := Vector3(randf_range(-0.3, 0.3), randf_range(-0.4, 0.4), randf_range(-0.25, 0.25))
+	var scatter_dir := Vector3(randf_range(-1.0, 1.0), randf_range(-0.2, 0.7), randf_range(-1.0, 1.0)).normalized()
+	chunk.position = local_pos + scatter_dir * randf_range(1.6, 2.6)
+	chunk.rotation = Vector3(randf_range(-PI, PI), randf_range(-PI, PI), randf_range(-PI, PI))
+	chunk.scale = Vector3.ONE * 0.2
+
+	if tree:
+		var tween := tree.create_tween()
+		tween.tween_interval(delay)
+		tween.set_parallel(true)
+		tween.tween_property(chunk, "position", local_pos, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tween.tween_property(chunk, "rotation", final_rot, 0.3).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tween.tween_property(chunk, "scale", Vector3.ONE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 ## Round-topped shield of rock chunks that fly in from scattered directions
 ## and assemble in front of the player, as if pulled together from the
@@ -447,11 +507,11 @@ const _EARTH_SHIELD_CHUNKS := [
 static func _spawn_earth_shield(follow_node: Node3D, color: Color) -> Node3D:
 	var root := Node3D.new()
 	follow_node.add_child(root)
-	root.position = Vector3(0, 0, -1.05)
+	root.position = Vector3(0, 0, -1.0)
 	root.scale = Vector3.ONE
 
 	var tree := follow_node.get_tree()
-	VFX._spawn_particle_layer(follow_node, Vector3(0, 0.05, -1.05), color.darkened(0.2), {
+	VFX._spawn_particle_layer(follow_node, Vector3(0, 0.05, -1.0), color.darkened(0.2), {
 		"amount": 14, "lifetime": 0.45, "explosiveness": 1.0,
 		"mesh_radius": 0.08, "energy": 0.5, "start_alpha": 0.6,
 		"spread": 110.0, "velocity_min": 0.8, "velocity_max": 2.0,
@@ -459,33 +519,11 @@ static func _spawn_earth_shield(follow_node: Node3D, color: Color) -> Node3D:
 	})
 
 	for slot in _EARTH_SHIELD_CHUNKS:
-		var chunk := MeshInstance3D.new()
-		var mesh := BoxMesh.new()
-		mesh.size = Vector3(
-			randf_range(0.55, 0.85), randf_range(0.5, 0.8), randf_range(0.35, 0.55)
-		)
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = color.darkened(randf_range(0.0, 0.3)).lightened(randf_range(0.0, 0.08))
-		mat.roughness = 0.95
-		mat.metallic = 0.0
-		mesh.material = mat
-		chunk.mesh = mesh
-		root.add_child(chunk)
-
-		var final_pos := Vector3(slot.x, slot.y, randf_range(-0.12, 0.12))
-		var final_rot := Vector3(randf_range(-0.5, 0.5), randf_range(-0.6, 0.6), randf_range(-0.5, 0.5))
-		var scatter_dir := Vector3(randf_range(-1.0, 1.0), randf_range(-0.2, 0.7), randf_range(-1.0, 1.0)).normalized()
-		chunk.position = final_pos + scatter_dir * randf_range(1.6, 2.6)
-		chunk.rotation = Vector3(randf_range(-PI, PI), randf_range(-PI, PI), randf_range(-PI, PI))
-		chunk.scale = Vector3.ONE * 0.25
-
-		if tree:
-			var tween := tree.create_tween()
-			tween.tween_interval(randf_range(0.0, 0.1))
-			tween.set_parallel(true)
-			tween.tween_property(chunk, "position", final_pos, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-			tween.tween_property(chunk, "rotation", final_rot, 0.3).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-			tween.tween_property(chunk, "scale", Vector3.ONE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		var local_pos := Vector3(slot.x, slot.y, randf_range(-0.1, 0.1))
+		_spawn_rock_chunk(root, tree, local_pos, randf_range(0.62, 0.85), color, randf_range(0.0, 0.08))
+	for slot in _EARTH_SHIELD_FILLER:
+		var local_pos := Vector3(slot.x, slot.y, randf_range(0.12, 0.24))
+		_spawn_rock_chunk(root, tree, local_pos, randf_range(0.32, 0.44), color, randf_range(0.05, 0.16))
 	return root
 
 static func _crumble_and_free_shield(root: Node3D) -> void:
