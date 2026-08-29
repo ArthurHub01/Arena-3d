@@ -430,23 +430,52 @@ static func _spawn_static_dome(follow_node: Node3D, color: Color) -> MeshInstanc
 	mesh_inst.position = Vector3(0, 1.0, 0)
 	return mesh_inst
 
-static func _spawn_earth_wall_shell(follow_node: Node3D, color: Color) -> MeshInstance3D:
+## A slab of rock that rises out of the ground just in front of the player
+## (not around them) — grows from a thin sliver into a full wall.
+static func _spawn_rising_wall(follow_node: Node3D, color: Color) -> MeshInstance3D:
 	var mesh_inst := MeshInstance3D.new()
-	var mesh := CylinderMesh.new()
-	mesh.top_radius = 0.85
-	mesh.bottom_radius = 0.95
-	mesh.height = 1.6
-	mesh.radial_segments = 10
-	mesh.material = rock_material(color.darkened(0.1))
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(1.7, 1.8, 0.35)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color.darkened(0.25)
+	mat.roughness = 0.95
+	mat.metallic = 0.0
+	mesh.material = mat
 	mesh_inst.mesh = mesh
 	follow_node.add_child(mesh_inst)
-	mesh_inst.position = Vector3(0, 0.9, 0)
+	mesh_inst.position = Vector3(0, 0.9, -1.1)
+	mesh_inst.scale = Vector3(1, 0.04, 1)
+
+	var tree := follow_node.get_tree()
+	if tree:
+		VFX._spawn_particle_layer(follow_node, Vector3(0, 0.05, -1.1), color.darkened(0.2), {
+			"amount": 12, "lifetime": 0.4, "explosiveness": 1.0,
+			"mesh_radius": 0.09, "energy": 0.5, "start_alpha": 0.6,
+			"spread": 100.0, "velocity_min": 0.8, "velocity_max": 1.8,
+			"gravity": Vector3(0, -1.0, 0), "scale_min": 0.7, "scale_max": 1.3,
+		})
+		var tween := tree.create_tween()
+		tween.tween_property(mesh_inst, "scale:y", 1.0, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	return mesh_inst
+
+static func _sink_and_free_wall(mesh_inst: MeshInstance3D) -> void:
+	if not is_instance_valid(mesh_inst):
+		return
+	var tree := mesh_inst.get_tree()
+	if tree == null:
+		mesh_inst.queue_free()
+		return
+	var tween := tree.create_tween()
+	tween.tween_property(mesh_inst, "scale:y", 0.04, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	tween.tween_callback(func():
+		if is_instance_valid(mesh_inst):
+			mesh_inst.queue_free()
+	)
 
 ## Returns a handle (Dictionary) to pass into stop_block_stance() later.
 static func start_block_stance(element: ElementType.Type, player: Node3D) -> Dictionary:
 	var color := ElementType.get_color(element)
-	var handle := {"particles": null, "mesh": null}
+	var handle := {"particles": null, "mesh": null, "on_stop": Callable()}
 	match element:
 		ElementType.Type.FIRE:
 			var particles := _spawn_vortex(player, Vector3(0, 1.0, 0), color, 0.7, 2.5, _BLOCK_VORTEX_DURATION, 0.07, 0.9)
@@ -457,10 +486,9 @@ static func start_block_stance(element: ElementType.Type, player: Node3D) -> Dic
 			particles.position = Vector3(0, 1.0, 0)
 			handle["particles"] = particles
 		ElementType.Type.EARTH:
-			handle["mesh"] = _spawn_earth_wall_shell(player, color)
-			var particles := _spawn_vortex(player, Vector3(0, 1.0, 0), color.darkened(0.1), 0.9, 0.6, _BLOCK_VORTEX_DURATION, 0.08, 0.05)
-			particles.position = Vector3(0, 1.0, 0)
-			handle["particles"] = particles
+			var wall := _spawn_rising_wall(player, color)
+			handle["mesh"] = wall
+			handle["on_stop"] = func(): _sink_and_free_wall(wall)
 		ElementType.Type.AIR:
 			handle["mesh"] = _spawn_static_dome(player, color)
 		ElementType.Type.LIGHTNING:
@@ -481,6 +509,10 @@ static func stop_block_stance(handle: Dictionary) -> void:
 			)
 		else:
 			particles.queue_free()
+	var on_stop: Callable = handle.get("on_stop", Callable())
+	if on_stop.is_valid():
+		on_stop.call()
+		return
 	var mesh_inst: MeshInstance3D = handle.get("mesh")
 	if is_instance_valid(mesh_inst):
 		mesh_inst.queue_free()
