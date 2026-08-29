@@ -30,3 +30,6 @@ enum Delivery {
 ## On-hit effects, shared by any delivery type. 0 = no effect.
 @export var knockback_force: float = 0.0
 @export var stagger_duration: float = 0.0
+
+## 1-10 for a combo attack slot, 0 for the basic/special (non-combo) abilities.
+@export var combo_slot: int = 0

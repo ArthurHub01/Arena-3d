@@ -62,4 +62,6 @@ func _on_body_entered(body: Node3D) -> void:
 	if body is Player and body != shooter:
 		var dir := -global_transform.basis.z
 		body.take_damage(damage, element, dir, knockback_force, stagger_duration)
+		if is_instance_valid(shooter):
+			shooter._gain_special_meter()
 		queue_free()

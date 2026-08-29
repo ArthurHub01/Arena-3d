@@ -7,3 +7,4 @@ var is_host: bool = false
 var host_ip: String = ""
 var selected_element: ElementType.Type = ElementType.Type.FIRE
 var vs_computer: bool = false
+var player_nickname: String = "Jogador"

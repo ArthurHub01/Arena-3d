@@ -8,6 +8,8 @@ const PLAYER_SCENE: PackedScene = preload("res://scenes/player/Player.tscn")
 @onready var hud_root: Control = $HUD/HUDRoot
 @onready var hp_bar_p1: ChevronBar = $HUD/HUDRoot/HpGroupP1/HpBarWrapP1/HpBarP1
 @onready var hp_bar_p2: ChevronBar = $HUD/HUDRoot/HpGroupP2/HpBarWrapP2/HpBarP2
+@onready var special_bar_p1: ChevronBar = $HUD/HUDRoot/SpecialBarP1
+@onready var special_bar_p2: ChevronBar = $HUD/HUDRoot/SpecialBarP2
 @onready var hp_label_p1: Label = $HUD/HUDRoot/HpGroupP1/HpLabelP1
 @onready var hp_label_p2: Label = $HUD/HUDRoot/HpGroupP2/HpLabelP2
 @onready var element_label_p1: Label = $HUD/HUDRoot/ElementLabelP1
@@ -29,7 +31,10 @@ const PRE_MATCH_DURATION := 4.0
 const PRE_MATCH_TIP_INTERVAL := 2.0
 const PRE_MATCH_TIPS := [
 	"Mova-se com WASD e pule com Espaço.",
-	"Pressione Q para usar o ataque básico do seu elemento.",
+	"Clique esquerdo ataca. Segure W/A/S/D e clique de novo em seguida para um golpe combinado mais forte.",
+	"Clique direito com uma direção segurada esquiva com um instante de invencibilidade.",
+	"Segure o clique direito sem direção para bloquear e reduzir o dano recebido.",
+	"O clique do meio lança o especial quando a barrinha dourada estiver cheia.",
 	"O nome do elemento de cada jogador aparece abaixo da barra de vida.",
 	"Ataques de Raio têm um pequeno atraso — desvie se movendo para o lado!",
 	"Vença 2 rodadas para ganhar a partida.",
@@ -67,7 +72,7 @@ func _ready() -> void:
 			return
 		multiplayer.multiplayer_peer = peer
 		multiplayer.peer_disconnected.connect(_on_peer_disconnected)
-		_spawn_player(1, spawn_p1.global_position, true, NetworkState.selected_element)
+		_spawn_player(1, spawn_p1.global_position, true, NetworkState.selected_element, NetworkState.player_nickname)
 		waiting_label.show()
 		lan_discovery = LanDiscovery.new()
 		add_child(lan_discovery)
@@ -83,24 +88,24 @@ func _ready() -> void:
 		multiplayer.connected_to_server.connect(_on_connected_to_server)
 
 func _start_vs_computer() -> void:
-	_spawn_player(1, spawn_p1.global_position, true, NetworkState.selected_element)
+	_spawn_player(1, spawn_p1.global_position, true, NetworkState.selected_element, NetworkState.player_nickname)
 	var ai_elements := [ElementType.Type.FIRE, ElementType.Type.WATER, ElementType.Type.EARTH, ElementType.Type.AIR, ElementType.Type.LIGHTNING]
 	ai_elements.erase(NetworkState.selected_element)
 	var ai_element: ElementType.Type = ai_elements[randi() % ai_elements.size()] if not ai_elements.is_empty() else NetworkState.selected_element
-	_spawn_player(2, spawn_p2.global_position, false, ai_element)
+	_spawn_player(2, spawn_p2.global_position, false, ai_element, "CPU")
 	player_two.is_ai_controlled = true
 
 func _on_connected_to_server() -> void:
-	_report_element.rpc_id(1, NetworkState.selected_element)
+	_report_element.rpc_id(1, NetworkState.selected_element, NetworkState.player_nickname)
 
 @rpc("any_peer", "reliable")
-func _report_element(element: ElementType.Type) -> void:
+func _report_element(element: ElementType.Type, nickname: String) -> void:
 	if not multiplayer.is_server():
 		return
 	var sender_id := multiplayer.get_remote_sender_id()
-	_spawn_player(sender_id, spawn_p2.global_position, false, element)
-	_spawn_player_rpc.rpc_id(sender_id, 1, spawn_p1.global_position, true, NetworkState.selected_element)
-	_spawn_player_rpc.rpc_id(sender_id, sender_id, spawn_p2.global_position, false, element)
+	_spawn_player(sender_id, spawn_p2.global_position, false, element, nickname)
+	_spawn_player_rpc.rpc_id(sender_id, 1, spawn_p1.global_position, true, NetworkState.selected_element, NetworkState.player_nickname)
+	_spawn_player_rpc.rpc_id(sender_id, sender_id, spawn_p2.global_position, false, element, nickname)
 
 func _on_peer_disconnected(id: int) -> void:
 	if players_by_id.has(id):
@@ -120,21 +125,23 @@ func _on_peer_disconnected(id: int) -> void:
 		waiting_label.show()
 
 @rpc("any_peer", "reliable")
-func _spawn_player_rpc(id: int, spawn_position: Vector3, is_first: bool, element: ElementType.Type) -> void:
-	_spawn_player(id, spawn_position, is_first, element)
+func _spawn_player_rpc(id: int, spawn_position: Vector3, is_first: bool, element: ElementType.Type, nickname: String) -> void:
+	_spawn_player(id, spawn_position, is_first, element, nickname)
 
-func _spawn_player(id: int, spawn_position: Vector3, is_first: bool, element: ElementType.Type) -> void:
+func _spawn_player(id: int, spawn_position: Vector3, is_first: bool, element: ElementType.Type, nickname: String) -> void:
 	var player: Player = PLAYER_SCENE.instantiate()
 	player.name = str(id)
 	player.is_local_player = (id == multiplayer.get_unique_id())
 	player.set_element(element)
+	player.set_nickname(nickname)
 	add_child(player)
 	player.global_position = spawn_position
 	player.set_multiplayer_authority(id)
 	players_by_id[id] = player
 	var hp_bar := hp_bar_p1 if is_first else hp_bar_p2
 	var hp_label := hp_label_p1 if is_first else hp_label_p2
-	_wire_player(player, hp_bar, hp_label)
+	var special_bar := special_bar_p1 if is_first else special_bar_p2
+	_wire_player(player, hp_bar, hp_label, special_bar)
 	var element_label := element_label_p1 if is_first else element_label_p2
 	element_label.text = ElementType.display_name(element)
 	if is_first:
@@ -176,7 +183,7 @@ func _begin_pre_match_sequence() -> void:
 	if is_instance_valid(player_two):
 		player_two.match_active = true
 
-func _wire_player(player: Player, hp_bar: ChevronBar, hp_label: Label) -> void:
+func _wire_player(player: Player, hp_bar: ChevronBar, hp_label: Label, special_bar: ChevronBar) -> void:
 	hp_bar.max_value = player.stats.max_hp
 	hp_bar.value = player.stats.current_hp
 	hp_label.text = "%d/%d" % [player.stats.current_hp, player.stats.max_hp]
@@ -185,6 +192,12 @@ func _wire_player(player: Player, hp_bar: ChevronBar, hp_label: Label) -> void:
 		hp_label.text = "%d/%d" % [current_hp, player.stats.max_hp]
 	)
 	player.died.connect(_check_round_end)
+	special_bar.max_value = 100.0
+	special_bar.value = player.special_meter
+	player.special_meter_changed.connect(func(current, max_value):
+		special_bar.max_value = max_value
+		special_bar.value = current
+	)
 
 func _check_round_end() -> void:
 	if round_over or match_over:

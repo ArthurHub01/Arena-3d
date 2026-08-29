@@ -146,6 +146,12 @@ text = "COMBATE ONLINE · 1V1"
 custom_minimum_size = Vector2(0, 4)
 layout_mode = 2
 
+[node name="NicknameInput" type="LineEdit" parent="CenterContainer/Columns/LeftPanel/LeftContent"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+placeholder_text = "Seu nome"
+max_length = 16
+
 [node name="HostButton" type="Button" parent="CenterContainer/Columns/LeftPanel/LeftContent"]
 custom_minimum_size = Vector2(0, 44)
 layout_mode = 2

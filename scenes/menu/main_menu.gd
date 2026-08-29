@@ -3,6 +3,8 @@ class_name MainMenu
 
 const PORT := 8910
 const ARENA_SCENE_PATH := "res://scenes/arena/Arena.tscn"
+const SETTINGS_PATH := "user://player_settings.cfg"
+const DEFAULT_NICKNAME := "Jogador"
 
 @onready var host_button: Button = $CenterContainer/Columns/LeftPanel/LeftContent/HostButton
 @onready var vs_computer_button: Button = $CenterContainer/Columns/LeftPanel/LeftContent/VsComputerButton
@@ -18,6 +20,7 @@ const ARENA_SCENE_PATH := "res://scenes/arena/Arena.tscn"
 @onready var element_name_label: Label = $CenterContainer/Columns/RightPanel/RightContent/ElementNameLabel
 @onready var element_list: VBoxContainer = $CenterContainer/Columns/RightPanel/RightContent/ElementScroll/ElementList
 @onready var discovered_list: VBoxContainer = $CenterContainer/Columns/LeftPanel/LeftContent/DiscoveredList
+@onready var nickname_input: LineEdit = $CenterContainer/Columns/LeftPanel/LeftContent/NicknameInput
 
 var updater: GameUpdater
 var pending_download_url := ""
@@ -37,6 +40,8 @@ func _ready() -> void:
 	update_button.pressed.connect(_on_update_button_pressed)
 
 	_setup_element_buttons()
+	_load_nickname()
+	nickname_input.text_changed.connect(_on_nickname_changed)
 
 	version_label.text = GameVersion.DISPLAY_NAME
 	get_window().title = "Arena 3D - %s" % GameVersion.DISPLAY_NAME
@@ -85,6 +90,21 @@ func _on_element_selected(element: ElementType.Type) -> void:
 		entry["icon"].selected = is_selected
 		entry["label"].add_theme_color_override("font_color", UiTheme.COL_SIGNAL if is_selected else UiTheme.COL_INK_DIM)
 	element_name_label.text = ElementType.display_name(element)
+
+func _load_nickname() -> void:
+	var config := ConfigFile.new()
+	if config.load(SETTINGS_PATH) == OK:
+		NetworkState.player_nickname = config.get_value("player", "nickname", DEFAULT_NICKNAME)
+	nickname_input.text = NetworkState.player_nickname
+
+func _on_nickname_changed(new_text: String) -> void:
+	var nickname := new_text.strip_edges()
+	if nickname.is_empty():
+		nickname = DEFAULT_NICKNAME
+	NetworkState.player_nickname = nickname
+	var config := ConfigFile.new()
+	config.set_value("player", "nickname", nickname)
+	config.save(SETTINGS_PATH)
 
 func _check_cmdline_autoconnect() -> void:
 	for arg in OS.get_cmdline_user_args():

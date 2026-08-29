@@ -25,6 +25,14 @@ scale = Vector3(1, 1, 1)
 
 [node name="CharacterModel" parent="ModelRoot" instance=ExtResource("2")]
 
+[node name="NicknameLabel" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.2, 0)
+billboard = 1
+no_depth_test = true
+font_size = 32
+outline_size = 8
+text = ""
+
 [node name="CameraPivot" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
 

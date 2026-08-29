@@ -3,6 +3,7 @@ class_name Player
 
 signal damaged(current_hp: int)
 signal died()
+signal special_meter_changed(current: float, max_value: float)
 
 const SPEED := 9.0
 const JUMP_VELOCITY := 4.5
@@ -25,6 +26,25 @@ const AI_RANGE_BUFFER := 1.5
 const AI_MISS_CHANCE := 0.3
 const AI_AIM_SPREAD_DEGREES := 14.0
 
+const ATTACK_COMBO_WINDOW := 0.8
+const ATTACK_SLOT_MAP := {
+	"W": {"first": 1, "second": 2},
+	"A": {"first": 3, "second": 4},
+	"S": {"first": 5, "second": 6},
+	"D": {"first": 7, "second": 8},
+	"": {"first": 9, "second": 10},
+}
+const DODGE_INDEX_MAP := {"W": 1, "A": 2, "S": 3, "D": 4}
+const DODGE_LOCAL_DIR := {
+	"W": Vector3(0, 0, -1),
+	"A": Vector3(-1, 0, 0),
+	"S": Vector3(0, 0, 1),
+	"D": Vector3(1, 0, 0),
+}
+
+const SPECIAL_METER_MAX := 100.0
+const SPECIAL_METER_PER_HIT := 12.5
+
 const ANIM_IDLE := "idle"
 const ANIM_WALK := "walk"
 const ANIM_RUN := "run"
@@ -45,6 +65,7 @@ const HIT_ANIMS := {
 @onready var melee_area: Area3D = $MeleeHitPoint/MeleeArea
 @onready var anim_player: AnimationPlayer = $ModelRoot/CharacterModel/AnimationPlayer
 @onready var model_root: Node3D = $ModelRoot
+@onready var nickname_label: Label3D = $NicknameLabel
 
 var stats: CombatStats = CombatStats.new()
 var is_local_player: bool = true
@@ -53,20 +74,38 @@ var opponent: Player = null
 var match_active: bool = false
 var equipped_element: ElementType.Type = ElementType.Type.FIRE
 var basic_ability: AbilityData = AbilityLibrary.get_basic_ability(ElementType.Type.FIRE)
+var block_ability: DodgeData = AbilityLibrary.get_dodge(ElementType.Type.FIRE, 5)
 var attack_ready: bool = true
 var last_hit_element: ElementType.Type = ElementType.Type.NONE
 var stagger_timer: float = 0.0
 var _model_yaw_offset: float = 0.0
 var _target_model_yaw_offset: float = 0.0
 
+var _last_attack_family: String = ""
+var _attack_awaiting_second: bool = false
+var _combo_window_timer: float = 0.0
+
+var is_blocking: bool = false
+var is_invincible: bool = false
+var _invincible_timer: float = 0.0
+var _dodge_dir: Vector3 = Vector3.ZERO
+var _dodge_timer: float = 0.0
+var _dodge_speed: float = 0.0
+
+var special_meter: float = 0.0
+
 var projectile_scene: PackedScene = preload("res://scenes/player/Projectile.tscn")
 
 func set_element(element: ElementType.Type) -> void:
 	equipped_element = element
 	basic_ability = AbilityLibrary.get_basic_ability(element)
+	block_ability = AbilityLibrary.get_dodge(element, 5)
+
+func set_nickname(nickname: String) -> void:
+	nickname_label.text = nickname
 
 @rpc("unreliable_ordered", "call_remote")
-func _remote_update_transform(pos: Vector3, rot_y: float) -> void:
+func _remote_update_transform(pos: Vector3, rot_y: float, blocking: bool, invincible: bool) -> void:
 	var delta_pos := pos - global_position
 	var moved := delta_pos.length()
 	if moved > 0.01:
@@ -79,6 +118,8 @@ func _remote_update_transform(pos: Vector3, rot_y: float) -> void:
 		_target_model_yaw_offset = 0.0
 	global_position = pos
 	rotation.y = rot_y
+	is_blocking = blocking
+	is_invincible = invincible
 
 func _ready() -> void:
 	camera.current = is_local_player
@@ -116,12 +157,82 @@ func _play_locomotion_anim(is_moving: bool, speed_ratio: float = 1.0) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_local_player or not match_active or stagger_timer > 0.0:
 		return
-	if event.is_action_pressed("ability_basic") and attack_ready:
-		_do_basic_attack()
+	if event.is_action_pressed("attack_button"):
+		_try_attack()
+	elif event.is_action_pressed("dodge_button"):
+		_try_dodge()
+	elif event.is_action_released("dodge_button"):
+		is_blocking = false
+	elif event.is_action_pressed("special_button"):
+		_try_special()
+
+func _get_held_direction_family() -> String:
+	if Input.is_action_pressed("move_forward"):
+		return "W"
+	if Input.is_action_pressed("move_left"):
+		return "A"
+	if Input.is_action_pressed("move_back"):
+		return "S"
+	if Input.is_action_pressed("move_right"):
+		return "D"
+	return ""
+
+func _try_attack() -> void:
+	if not attack_ready:
+		return
+	var family := _get_held_direction_family()
+	var slot: int
+	if family == _last_attack_family and _attack_awaiting_second and _combo_window_timer > 0.0:
+		slot = ATTACK_SLOT_MAP[family]["second"]
+		_last_attack_family = ""
+		_attack_awaiting_second = false
+		_combo_window_timer = 0.0
+	else:
+		slot = ATTACK_SLOT_MAP[family]["first"]
+		_last_attack_family = family
+		_attack_awaiting_second = true
+		_combo_window_timer = ATTACK_COMBO_WINDOW
+	_fire_attack(AbilityLibrary.get_attack(equipped_element, slot))
+
+func _try_special() -> void:
+	if special_meter < SPECIAL_METER_MAX or not attack_ready:
+		return
+	special_meter = 0.0
+	special_meter_changed.emit(special_meter, SPECIAL_METER_MAX)
+	_fire_attack(AbilityLibrary.get_special(equipped_element))
+
+func _try_dodge() -> void:
+	var family := _get_held_direction_family()
+	if family == "":
+		is_blocking = true
+		return
+	var dodge := AbilityLibrary.get_dodge(equipped_element, DODGE_INDEX_MAP[family])
+	_perform_dodge(dodge, family)
+
+func _perform_dodge(dodge: DodgeData, family: String) -> void:
+	var local_dir: Vector3 = DODGE_LOCAL_DIR[family]
+	_dodge_dir = (transform.basis * local_dir).normalized()
+	_dodge_speed = dodge.dash_speed
+	_dodge_timer = dodge.dash_duration
+	is_invincible = true
+	_invincible_timer = dodge.iframe_duration
+
+func _gain_special_meter() -> void:
+	special_meter = min(SPECIAL_METER_MAX, special_meter + SPECIAL_METER_PER_HIT)
+	special_meter_changed.emit(special_meter, SPECIAL_METER_MAX)
 
 func _physics_process(delta: float) -> void:
 	if not (is_local_player or is_ai_controlled) or not match_active:
 		return
+
+	if _combo_window_timer > 0.0:
+		_combo_window_timer -= delta
+		if _combo_window_timer <= 0.0:
+			_attack_awaiting_second = false
+	if _invincible_timer > 0.0:
+		_invincible_timer -= delta
+		if _invincible_timer <= 0.0:
+			is_invincible = false
 
 	if stagger_timer > 0.0:
 		stagger_timer -= delta
@@ -132,7 +243,7 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		_play_locomotion_anim(false)
 		if is_multiplayer_authority() and multiplayer.has_multiplayer_peer():
-			_remote_update_transform.rpc(global_position, rotation.y)
+			_remote_update_transform.rpc(global_position, rotation.y, is_blocking, is_invincible)
 		return
 
 	var has_opponent := is_instance_valid(opponent)
@@ -155,8 +266,13 @@ func _physics_process(delta: float) -> void:
 		input_dir = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 
 	var direction := (transform.basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()
-	velocity.x = direction.x * SPEED
-	velocity.z = direction.z * SPEED
+	if _dodge_timer > 0.0:
+		_dodge_timer -= delta
+		velocity.x = _dodge_dir.x * _dodge_speed
+		velocity.z = _dodge_dir.z * _dodge_speed
+	else:
+		velocity.x = direction.x * SPEED
+		velocity.z = direction.z * SPEED
 	move_and_slide()
 
 	var horizontal_speed := Vector2(velocity.x, velocity.z).length()
@@ -175,7 +291,7 @@ func _physics_process(delta: float) -> void:
 		_update_combat_camera(delta)
 
 	if is_multiplayer_authority() and multiplayer.has_multiplayer_peer():
-		_remote_update_transform.rpc(global_position, rotation.y)
+		_remote_update_transform.rpc(global_position, rotation.y, is_blocking, is_invincible)
 
 func _ai_decide_movement() -> Vector2:
 	if not is_instance_valid(opponent):
@@ -195,7 +311,7 @@ func _ai_maybe_attack() -> void:
 	var preferred := AI_MELEE_PREFERRED_RANGE if basic_ability.delivery == AbilityData.Delivery.MELEE else AI_RANGED_PREFERRED_RANGE
 	var distance := global_position.distance_to(opponent.global_position)
 	if distance <= preferred + AI_RANGE_BUFFER:
-		_do_basic_attack()
+		_fire_attack(basic_ability)
 
 func _update_combat_camera(delta: float) -> void:
 	var mid := (global_position + opponent.global_position) / 2.0
@@ -212,24 +328,24 @@ func _update_combat_camera(delta: float) -> void:
 	camera.global_position = camera.global_position.lerp(desired_pos, lerp_amount)
 	camera.look_at(desired_look, Vector3.UP)
 
-func _do_basic_attack() -> void:
+func _fire_attack(ability: AbilityData) -> void:
 	attack_ready = false
-	var anim := basic_ability.anim_name if not basic_ability.anim_name.is_empty() else ANIM_PUNCH
+	var anim := ability.anim_name if not ability.anim_name.is_empty() else ANIM_PUNCH
 	anim_player.play(anim)
-	VFX.spawn_cast_burst(get_parent(), muzzle_point.global_position, -global_transform.basis.z, ElementType.get_color(basic_ability.element))
+	VFX.spawn_cast_burst(get_parent(), muzzle_point.global_position, -global_transform.basis.z, ElementType.get_color(ability.element))
 	if multiplayer.has_multiplayer_peer():
 		_show_attack_anim.rpc(anim)
 
 	if not (is_ai_controlled and randf() < AI_MISS_CHANCE):
-		match basic_ability.delivery:
+		match ability.delivery:
 			AbilityData.Delivery.MELEE:
-				_execute_melee()
+				_execute_melee(ability)
 			AbilityData.Delivery.PROJECTILE:
-				_execute_projectile()
+				_execute_projectile(ability)
 			AbilityData.Delivery.HITSCAN:
-				_execute_hitscan()
+				_execute_hitscan(ability)
 
-	get_tree().create_timer(basic_ability.cooldown).timeout.connect(func(): attack_ready = true)
+	get_tree().create_timer(ability.cooldown).timeout.connect(func(): attack_ready = true)
 
 func _ai_aim_spread_rad() -> float:
 	return deg_to_rad(randf_range(-AI_AIM_SPREAD_DEGREES, AI_AIM_SPREAD_DEGREES))
@@ -238,36 +354,37 @@ func _ai_aim_spread_rad() -> float:
 func _show_attack_anim(anim: String) -> void:
 	anim_player.play(anim)
 
-func _execute_melee() -> void:
-	melee_area.get_child(0).shape.radius = basic_ability.melee_range
+func _execute_melee(ability: AbilityData) -> void:
+	melee_area.get_child(0).shape.radius = ability.melee_range
 	for body in melee_area.get_overlapping_bodies():
 		if body is Player and body != self:
 			var dir := (body.global_position - global_position)
-			body.take_damage(basic_ability.damage, basic_ability.element, dir, basic_ability.knockback_force, basic_ability.stagger_duration)
+			body.take_damage(ability.damage, ability.element, dir, ability.knockback_force, ability.stagger_duration)
+			_gain_special_meter()
 
-func _execute_projectile() -> void:
+func _execute_projectile(ability: AbilityData) -> void:
 	var projectile: Projectile = projectile_scene.instantiate()
-	projectile.damage = basic_ability.damage
-	projectile.element = basic_ability.element
-	projectile.speed = basic_ability.projectile_speed
-	projectile.lifetime = basic_ability.projectile_lifetime
-	projectile.knockback_force = basic_ability.knockback_force
-	projectile.stagger_duration = basic_ability.stagger_duration
+	projectile.damage = ability.damage
+	projectile.element = ability.element
+	projectile.speed = ability.projectile_speed
+	projectile.lifetime = ability.projectile_lifetime
+	projectile.knockback_force = ability.knockback_force
+	projectile.stagger_duration = ability.stagger_duration
 	projectile.shooter = self
 	get_parent().add_child(projectile)
 	projectile.global_transform = muzzle_point.global_transform
 	if is_ai_controlled:
 		projectile.rotate_y(_ai_aim_spread_rad())
 
-func _execute_hitscan() -> void:
+func _execute_hitscan(ability: AbilityData) -> void:
 	var from := muzzle_point.global_position
 	var aim_dir := -global_transform.basis.z
 	if is_ai_controlled:
 		aim_dir = aim_dir.rotated(Vector3.UP, _ai_aim_spread_rad())
-	var to := from + aim_dir * basic_ability.hitscan_range
+	var to := from + aim_dir * ability.hitscan_range
 
-	if basic_ability.hitscan_delay > 0.0:
-		await get_tree().create_timer(basic_ability.hitscan_delay).timeout
+	if ability.hitscan_delay > 0.0:
+		await get_tree().create_timer(ability.hitscan_delay).timeout
 	if not is_instance_valid(self) or is_queued_for_deletion():
 		return
 
@@ -276,11 +393,12 @@ func _execute_hitscan() -> void:
 	query.exclude = [self]
 	var result := space_state.intersect_ray(query)
 	var beam_end: Vector3 = result.position if result else to
-	VFX.spawn_beam(get_parent(), from, beam_end, ElementType.get_color(basic_ability.element))
+	VFX.spawn_beam(get_parent(), from, beam_end, ElementType.get_color(ability.element))
 	if result and result.collider is Player and result.collider != self:
 		var target: Player = result.collider
 		var dir := (target.global_position - global_position)
-		target.take_damage(basic_ability.damage, basic_ability.element, dir, basic_ability.knockback_force, basic_ability.stagger_duration)
+		target.take_damage(ability.damage, ability.element, dir, ability.knockback_force, ability.stagger_duration)
+		_gain_special_meter()
 
 func take_damage(amount: int, element: ElementType.Type = ElementType.Type.NONE, knockback_dir: Vector3 = Vector3.ZERO, knockback_force: float = 0.0, stagger_duration: float = 0.0) -> void:
 	if multiplayer.has_multiplayer_peer():
@@ -311,6 +429,10 @@ func _hit_direction_anim(knockback_dir: Vector3) -> String:
 
 @rpc("call_local", "reliable", "any_peer")
 func _apply_damage(amount: int, element: ElementType.Type = ElementType.Type.NONE, knockback_dir: Vector3 = Vector3.ZERO, knockback_force: float = 0.0, stagger_duration: float = 0.0) -> void:
+	if is_invincible:
+		return
+	if is_blocking:
+		amount = int(amount * (1.0 - block_ability.block_damage_reduction))
 	last_hit_element = element
 	stats.apply_damage(amount)
 	damaged.emit(stats.current_hp)
@@ -331,5 +453,14 @@ func reset_player(spawn_position: Vector3) -> void:
 	global_position = spawn_position
 	velocity = Vector3.ZERO
 	stagger_timer = 0.0
+	is_blocking = false
+	is_invincible = false
+	_invincible_timer = 0.0
+	_dodge_timer = 0.0
+	_last_attack_family = ""
+	_attack_awaiting_second = false
+	_combo_window_timer = 0.0
+	special_meter = 0.0
+	special_meter_changed.emit(special_meter, SPECIAL_METER_MAX)
 	damaged.emit(stats.current_hp)
 	anim_player.play(ANIM_IDLE)
