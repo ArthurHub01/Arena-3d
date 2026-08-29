@@ -30,14 +30,15 @@ const ROUNDS_TO_WIN := 2
 const ROUND_TRANSITION_DELAY := 2.5
 const PRE_MATCH_DURATION := 4.0
 const PRE_MATCH_TIP_INTERVAL := 2.0
+const PRE_MATCH_KEY_TIP := "Segure W ou A e clique no botão esquerdo para usar a Habilidade 1 ou 2 do seu elemento — só clicar sem segurar direção usa o ataque simples, sem escudo/parede/etc."
 const PRE_MATCH_TIPS := [
 	"Mova-se com WASD e pule com Espaço.",
-	"Clique esquerdo ataca. Segure W/A/S/D e clique de novo em seguida para um golpe combinado mais forte.",
 	"Clique direito com uma direção segurada esquiva com um instante de invencibilidade.",
 	"Segure o clique direito sem direção para bloquear e reduzir o dano recebido.",
 	"O clique do meio lança o especial quando a barrinha dourada estiver cheia.",
 	"O nome do elemento de cada jogador aparece abaixo da barra de vida.",
 	"Ataques de Raio têm um pequeno atraso — desvie se movendo para o lado!",
+	"Errar um golpe deixa você vulnerável por mais tempo — não fique só clicando no vazio.",
 	"Vença 2 rodadas para ganhar a partida.",
 	"Depois do combate, aperte R para jogar novamente rapidinho.",
 ]
@@ -163,6 +164,7 @@ func _spawn_player(id: int, spawn_position: Vector3, is_first: bool, element: El
 func _begin_pre_match_sequence() -> void:
 	var tips := PRE_MATCH_TIPS.duplicate()
 	tips.shuffle()
+	tips.push_front(PRE_MATCH_KEY_TIP)
 	var tip_index := 0
 	loading_tip_label.text = tips[tip_index]
 	var remaining := PRE_MATCH_DURATION
