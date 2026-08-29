@@ -216,6 +216,7 @@ func _do_basic_attack() -> void:
 	attack_ready = false
 	var anim := basic_ability.anim_name if not basic_ability.anim_name.is_empty() else ANIM_PUNCH
 	anim_player.play(anim)
+	VFX.spawn_cast_burst(get_parent(), muzzle_point.global_position, -global_transform.basis.z, ElementType.get_color(basic_ability.element))
 	if multiplayer.has_multiplayer_peer():
 		_show_attack_anim.rpc(anim)
 
@@ -274,6 +275,8 @@ func _execute_hitscan() -> void:
 	var query := PhysicsRayQueryParameters3D.create(from, to, 2)
 	query.exclude = [self]
 	var result := space_state.intersect_ray(query)
+	var beam_end: Vector3 = result.position if result else to
+	VFX.spawn_beam(get_parent(), from, beam_end, ElementType.get_color(basic_ability.element))
 	if result and result.collider is Player and result.collider != self:
 		var target: Player = result.collider
 		var dir := (target.global_position - global_position)
