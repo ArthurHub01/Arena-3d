@@ -11,3 +11,4 @@ cooldown = 0.5
 delivery = 0
 anim_name = "cast_water"
 melee_range = 1.6
+cast_time = 0.15

@@ -12,3 +12,4 @@ delivery = 1
 anim_name = "cast_fire"
 projectile_speed = 20.0
 projectile_lifetime = 2.5
+cast_time = 0.15

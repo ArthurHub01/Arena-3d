@@ -13,3 +13,4 @@ anim_name = "cast_earth"
 projectile_speed = 8.0
 projectile_lifetime = 4.0
 stagger_duration = 1.0
+cast_time = 0.15

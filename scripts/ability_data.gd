@@ -33,6 +33,11 @@ enum Delivery {
 ## HITSCAN only: delay between aiming and the hit resolving, so the target has time to dodge.
 @export var hitscan_delay: float = 0.25
 
+## Delay between casting and the hit actually resolving, for any delivery that threatens
+## the opponent (MELEE/PROJECTILE/HITSCAN/CONE/LINE/TELEPORT_STRIKE/MULTI_HITSCAN) — the
+## animation/VFX play immediately, but damage only lands after this, giving a real dodge window.
+@export var cast_time: float = 0.15
+
 ## On-hit effects, shared by any delivery type. 0 = no effect.
 @export var knockback_force: float = 0.0
 @export var stagger_duration: float = 0.0

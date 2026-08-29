@@ -2,7 +2,8 @@
 extends SceneTree
 
 const RAW := "res://assets/models/mixamo_raw/"
-const OUT_SCENE := "res://assets/models/human_character_rigged.tscn"
+const DEFAULT_BODY := "character.fbx"
+const DEFAULT_OUT_SCENE := "res://assets/models/human_character_rigged.tscn"
 
 const ANIM_SOURCES := {
 	"idle": "idle",
@@ -32,8 +33,23 @@ func _load_clip(file_key: String) -> Animation:
 	inst.free()
 	return anim
 
+func _fix_ownership(node: Node, owner_node: Node) -> void:
+	for child in node.get_children():
+		if child.owner != owner_node:
+			child.owner = owner_node
+		_fix_ownership(child, owner_node)
+
+func _get_arg(prefix: String, default_value: String) -> String:
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with(prefix):
+			return arg.substr(prefix.length())
+	return default_value
+
 func _initialize() -> void:
-	var char_scene: PackedScene = load(RAW + "character.fbx")
+	var body_file := _get_arg("--body=", DEFAULT_BODY)
+	var out_scene := _get_arg("--out=", DEFAULT_OUT_SCENE)
+
+	var char_scene: PackedScene = load(RAW + body_file)
 	var char_inst := char_scene.instantiate()
 
 	var ap: AnimationPlayer = char_inst.get_node("AnimationPlayer")
@@ -52,17 +68,19 @@ func _initialize() -> void:
 	ap.add_animation_library("", new_lib)
 	ap.autoplay = "idle"
 
+	_fix_ownership(char_inst, char_inst)
+
 	var packed := PackedScene.new()
 	var result := packed.pack(char_inst)
 	if result != OK:
 		push_error("pack failed: %s" % result)
 		quit(1)
 		return
-	var save_result := ResourceSaver.save(packed, OUT_SCENE)
+	var save_result := ResourceSaver.save(packed, out_scene)
 	if save_result != OK:
 		push_error("save failed: %s" % save_result)
 		quit(1)
 		return
-	print("Saved ", OUT_SCENE)
+	print("Saved ", out_scene)
 	char_inst.free()
 	quit()

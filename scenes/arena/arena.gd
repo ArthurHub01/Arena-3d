@@ -73,7 +73,7 @@ func _ready() -> void:
 			return
 		multiplayer.multiplayer_peer = peer
 		multiplayer.peer_disconnected.connect(_on_peer_disconnected)
-		_spawn_player(1, spawn_p1.global_position, true, NetworkState.selected_element, NetworkState.player_nickname, NetworkState.player_color)
+		_spawn_player(1, spawn_p1.global_position, true, NetworkState.selected_element, NetworkState.player_nickname, NetworkState.player_color, NetworkState.selected_character_id)
 		waiting_label.show()
 		lan_discovery = LanDiscovery.new()
 		add_child(lan_discovery)
@@ -89,24 +89,24 @@ func _ready() -> void:
 		multiplayer.connected_to_server.connect(_on_connected_to_server)
 
 func _start_vs_computer() -> void:
-	_spawn_player(1, spawn_p1.global_position, true, NetworkState.selected_element, NetworkState.player_nickname, NetworkState.player_color)
+	_spawn_player(1, spawn_p1.global_position, true, NetworkState.selected_element, NetworkState.player_nickname, NetworkState.player_color, NetworkState.selected_character_id)
 	var ai_elements := [ElementType.Type.FIRE, ElementType.Type.WATER, ElementType.Type.EARTH, ElementType.Type.AIR, ElementType.Type.LIGHTNING]
 	ai_elements.erase(NetworkState.selected_element)
 	var ai_element: ElementType.Type = ai_elements[randi() % ai_elements.size()] if not ai_elements.is_empty() else NetworkState.selected_element
-	_spawn_player(2, spawn_p2.global_position, false, ai_element, "CPU", Color(0.2, 0.2, 0.2, 1))
+	_spawn_player(2, spawn_p2.global_position, false, ai_element, "CPU", Color(0.2, 0.2, 0.2, 1), "default")
 	player_two.is_ai_controlled = true
 
 func _on_connected_to_server() -> void:
-	_report_element.rpc_id(1, NetworkState.selected_element, NetworkState.player_nickname, NetworkState.player_color)
+	_report_element.rpc_id(1, NetworkState.selected_element, NetworkState.player_nickname, NetworkState.player_color, NetworkState.selected_character_id)
 
 @rpc("any_peer", "reliable")
-func _report_element(element: ElementType.Type, nickname: String, color: Color) -> void:
+func _report_element(element: ElementType.Type, nickname: String, color: Color, character_id: String) -> void:
 	if not multiplayer.is_server():
 		return
 	var sender_id := multiplayer.get_remote_sender_id()
-	_spawn_player(sender_id, spawn_p2.global_position, false, element, nickname, color)
-	_spawn_player_rpc.rpc_id(sender_id, 1, spawn_p1.global_position, true, NetworkState.selected_element, NetworkState.player_nickname, NetworkState.player_color)
-	_spawn_player_rpc.rpc_id(sender_id, sender_id, spawn_p2.global_position, false, element, nickname, color)
+	_spawn_player(sender_id, spawn_p2.global_position, false, element, nickname, color, character_id)
+	_spawn_player_rpc.rpc_id(sender_id, 1, spawn_p1.global_position, true, NetworkState.selected_element, NetworkState.player_nickname, NetworkState.player_color, NetworkState.selected_character_id)
+	_spawn_player_rpc.rpc_id(sender_id, sender_id, spawn_p2.global_position, false, element, nickname, color, character_id)
 
 func _on_peer_disconnected(id: int) -> void:
 	if players_by_id.has(id):
@@ -126,14 +126,15 @@ func _on_peer_disconnected(id: int) -> void:
 		waiting_label.show()
 
 @rpc("any_peer", "reliable")
-func _spawn_player_rpc(id: int, spawn_position: Vector3, is_first: bool, element: ElementType.Type, nickname: String, color: Color) -> void:
-	_spawn_player(id, spawn_position, is_first, element, nickname, color)
+func _spawn_player_rpc(id: int, spawn_position: Vector3, is_first: bool, element: ElementType.Type, nickname: String, color: Color, character_id: String) -> void:
+	_spawn_player(id, spawn_position, is_first, element, nickname, color, character_id)
 
-func _spawn_player(id: int, spawn_position: Vector3, is_first: bool, element: ElementType.Type, nickname: String, color: Color) -> void:
+func _spawn_player(id: int, spawn_position: Vector3, is_first: bool, element: ElementType.Type, nickname: String, color: Color, character_id: String) -> void:
 	var player: Player = PLAYER_SCENE.instantiate()
 	player.name = str(id)
 	player.is_local_player = (id == multiplayer.get_unique_id())
 	player.set_element(element)
+	player.set_character_model(character_id)
 	add_child(player)
 	player.set_nickname(nickname)
 	player.set_color(color)

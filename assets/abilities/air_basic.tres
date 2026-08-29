@@ -13,3 +13,4 @@ anim_name = "cast_air"
 projectile_speed = 22.0
 projectile_lifetime = 4.0
 knockback_force = 6.0
+cast_time = 0.15

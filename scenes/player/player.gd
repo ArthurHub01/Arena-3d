@@ -45,6 +45,8 @@ const DODGE_LOCAL_DIR := {
 const SPECIAL_METER_MAX := 100.0
 const SPECIAL_METER_PER_HIT := 12.5
 
+const MISS_RECOVERY_MULTIPLIER := 2.5
+
 const ANIM_IDLE := "idle"
 const ANIM_WALK := "walk"
 const ANIM_RUN := "run"
@@ -404,28 +406,37 @@ func _fire_attack(ability: AbilityData) -> void:
 	if multiplayer.has_multiplayer_peer():
 		_show_attack_anim.rpc(anim)
 
+	if ability.cast_time > 0.0:
+		await get_tree().create_timer(ability.cast_time).timeout
+	if not is_instance_valid(self) or is_queued_for_deletion():
+		return
+
+	var connected := true
 	if not (is_ai_controlled and randf() < AI_MISS_CHANCE):
 		match ability.delivery:
 			AbilityData.Delivery.MELEE:
-				_execute_melee(ability)
+				connected = _execute_melee(ability)
 			AbilityData.Delivery.PROJECTILE:
 				_execute_projectile(ability)
 			AbilityData.Delivery.HITSCAN:
-				_execute_hitscan(ability)
+				connected = _execute_hitscan(ability)
 			AbilityData.Delivery.CONE:
-				_execute_cone(ability)
+				connected = _execute_cone(ability)
 			AbilityData.Delivery.LINE:
-				_execute_line(ability)
+				connected = _execute_line(ability)
 			AbilityData.Delivery.SELF_BUFF:
 				_execute_self_buff(ability)
 			AbilityData.Delivery.WALL:
 				_execute_wall(ability)
 			AbilityData.Delivery.TELEPORT_STRIKE:
-				_execute_teleport_strike(ability)
+				connected = _execute_teleport_strike(ability)
 			AbilityData.Delivery.MULTI_HITSCAN:
-				_execute_multi_hitscan(ability)
+				connected = await _execute_multi_hitscan(ability)
+	else:
+		connected = false
 
-	get_tree().create_timer(ability.cooldown).timeout.connect(func(): attack_ready = true)
+	var recovery: float = ability.cooldown if connected else ability.cooldown * MISS_RECOVERY_MULTIPLIER
+	get_tree().create_timer(recovery).timeout.connect(func(): attack_ready = true)
 
 func _ai_aim_spread_rad() -> float:
 	return deg_to_rad(randf_range(-AI_AIM_SPREAD_DEGREES, AI_AIM_SPREAD_DEGREES))
@@ -434,8 +445,9 @@ func _ai_aim_spread_rad() -> float:
 func _show_attack_anim(anim: String) -> void:
 	anim_player.play(anim)
 
-func _execute_melee(ability: AbilityData) -> void:
+func _execute_melee(ability: AbilityData) -> bool:
 	melee_area.get_child(0).shape.radius = ability.melee_range
+	var hit := false
 	for body in melee_area.get_overlapping_bodies():
 		if body is Player and body != self:
 			var dir := (body.global_position - global_position)
@@ -443,6 +455,8 @@ func _execute_melee(ability: AbilityData) -> void:
 				body.is_blocking = false
 			body.take_damage(ability.damage, ability.element, dir, ability.knockback_force, ability.stagger_duration)
 			_gain_special_meter()
+			hit = true
+	return hit
 
 func _execute_projectile(ability: AbilityData) -> void:
 	var projectile: Projectile = projectile_scene.instantiate()
@@ -459,17 +473,12 @@ func _execute_projectile(ability: AbilityData) -> void:
 	if is_ai_controlled:
 		projectile.rotate_y(_ai_aim_spread_rad())
 
-func _execute_hitscan(ability: AbilityData) -> void:
+func _execute_hitscan(ability: AbilityData) -> bool:
 	var from := muzzle_point.global_position
 	var aim_dir := -global_transform.basis.z
 	if is_ai_controlled:
 		aim_dir = aim_dir.rotated(Vector3.UP, _ai_aim_spread_rad())
 	var to := from + aim_dir * ability.hitscan_range
-
-	if ability.hitscan_delay > 0.0:
-		await get_tree().create_timer(ability.hitscan_delay).timeout
-	if not is_instance_valid(self) or is_queued_for_deletion():
-		return
 
 	var space_state := get_world_3d().direct_space_state
 	var query := PhysicsRayQueryParameters3D.create(from, to, 2)
@@ -482,44 +491,48 @@ func _execute_hitscan(ability: AbilityData) -> void:
 		var dir := (target.global_position - global_position)
 		target.take_damage(ability.damage, ability.element, dir, ability.knockback_force, ability.stagger_duration)
 		_gain_special_meter()
+		return true
+	return false
 
 func _knockback_dir_to_opponent(target: Player, ability: AbilityData) -> Vector3:
 	var dir := target.global_position - global_position
 	return -dir if ability.pull_instead_of_push else dir
 
-func _execute_cone(ability: AbilityData) -> void:
+func _execute_cone(ability: AbilityData) -> bool:
 	if not is_instance_valid(opponent):
-		return
+		return false
 	var to_opponent := opponent.global_position - global_position
 	var flat := Vector3(to_opponent.x, 0, to_opponent.z)
 	if flat.length() > ability.aoe_range:
-		return
+		return false
 	var forward := -global_transform.basis.z
 	var angle := rad_to_deg(forward.angle_to(flat.normalized()))
 	if angle > ability.cone_angle_degrees / 2.0:
-		return
+		return false
 	var dir := _knockback_dir_to_opponent(opponent, ability)
 	opponent.take_damage(ability.damage, ability.element, dir, ability.knockback_force, ability.stagger_duration)
 	_gain_special_meter()
 	AbilityVFX.play_landed(ability, get_parent(), opponent.global_position + Vector3(0, 1.0, 0))
 	if ability.burn_ticks > 0:
 		_apply_burn(ability, opponent)
+	return true
 
-func _execute_line(ability: AbilityData) -> void:
+func _execute_line(ability: AbilityData) -> bool:
 	if not is_instance_valid(opponent):
-		return
+		return false
 	var to_opponent := opponent.global_position - global_position
 	var forward := -global_transform.basis.z
 	var forward_dist := to_opponent.dot(forward)
 	if forward_dist < 0.0 or forward_dist > ability.aoe_range:
-		return
+		return false
 	var lateral := (to_opponent - forward * forward_dist).length()
 	if lateral > 1.5:
-		return
+		return false
 	var dir := _knockback_dir_to_opponent(opponent, ability)
 	opponent.take_damage(ability.damage, ability.element, dir, ability.knockback_force, ability.stagger_duration)
 	_gain_special_meter()
 	AbilityVFX.play_landed(ability, get_parent(), opponent.global_position + Vector3(0, 1.0, 0))
+	return true
 
 func _execute_self_buff(ability: AbilityData) -> void:
 	AbilityVFX.play_self_buff(ability, self)
@@ -555,9 +568,9 @@ func _execute_wall(ability: AbilityData) -> void:
 	else:
 		arena._spawn_wall(spawn_pos, rotation.y, ability.wall_duration)
 
-func _execute_teleport_strike(ability: AbilityData) -> void:
+func _execute_teleport_strike(ability: AbilityData) -> bool:
 	if not is_instance_valid(opponent):
-		return
+		return false
 	var old_pos := global_position
 	var behind_dir := (opponent.global_position - global_position).normalized()
 	global_position = opponent.global_position + behind_dir * 1.2
@@ -566,14 +579,18 @@ func _execute_teleport_strike(ability: AbilityData) -> void:
 	var dir := opponent.global_position - global_position
 	opponent.take_damage(ability.damage, ability.element, dir, ability.knockback_force, ability.stagger_duration)
 	_gain_special_meter()
+	return true
 
-func _execute_multi_hitscan(ability: AbilityData) -> void:
+func _execute_multi_hitscan(ability: AbilityData) -> bool:
+	var any_hit := false
 	for i in range(ability.multi_hit_count):
-		_execute_hitscan(ability)
+		if _execute_hitscan(ability):
+			any_hit = true
 		if i < ability.multi_hit_count - 1:
 			await get_tree().create_timer(ability.multi_hit_interval).timeout
 			if not is_instance_valid(self) or is_queued_for_deletion():
-				return
+				return any_hit
+	return any_hit
 
 func _apply_burn(ability: AbilityData, target: Player) -> void:
 	for i in range(ability.burn_ticks):
