@@ -66,8 +66,6 @@ const HIT_ANIMS := {
 @onready var anim_player: AnimationPlayer = $ModelRoot/CharacterModel/AnimationPlayer
 @onready var model_root: Node3D = $ModelRoot
 @onready var nickname_label: Label3D = $NicknameLabel
-@onready var body_mesh: MeshInstance3D = $ModelRoot/CharacterModel/Skeleton3D/Beta_Surface
-@onready var joints_mesh: MeshInstance3D = $ModelRoot/CharacterModel/Skeleton3D/Beta_Joints
 
 var stats: CombatStats = CombatStats.new()
 var is_local_player: bool = true
@@ -114,6 +112,15 @@ var special_meter: float = 0.0
 
 var projectile_scene: PackedScene = preload("res://scenes/player/Projectile.tscn")
 
+func set_character_model(character_id: String) -> void:
+	var root: Node = get_node("ModelRoot")
+	var old_model: Node = root.get_node_or_null("CharacterModel")
+	if old_model:
+		old_model.free()
+	var new_model: Node = CharacterLibrary.get_scene(character_id).instantiate()
+	new_model.name = "CharacterModel"
+	root.add_child(new_model)
+
 func set_element(element: ElementType.Type) -> void:
 	equipped_element = element
 	basic_ability = AbilityLibrary.get_basic_ability(element)
@@ -123,11 +130,16 @@ func set_nickname(nickname: String) -> void:
 	nickname_label.text = nickname
 
 func set_color(color: Color) -> void:
-	for mesh_instance in [body_mesh, joints_mesh]:
-		var mat: StandardMaterial3D = mesh_instance.mesh.surface_get_material(0).duplicate()
-		mat.vertex_color_use_as_albedo = false
-		mat.albedo_color = color
-		mesh_instance.set_surface_override_material(0, mat)
+	var skeleton: Node = get_node("ModelRoot/CharacterModel/Skeleton3D")
+	for child in skeleton.get_children():
+		if not (child is MeshInstance3D):
+			continue
+		var mesh_instance: MeshInstance3D = child
+		for surface_idx in mesh_instance.mesh.get_surface_count():
+			var mat: StandardMaterial3D = mesh_instance.mesh.surface_get_material(surface_idx).duplicate()
+			mat.vertex_color_use_as_albedo = false
+			mat.albedo_color = color
+			mesh_instance.set_surface_override_material(surface_idx, mat)
 
 @rpc("unreliable_ordered", "call_remote")
 func _remote_update_transform(pos: Vector3, rot_y: float, blocking: bool, invincible: bool) -> void:
@@ -388,7 +400,7 @@ func _fire_attack(ability: AbilityData) -> void:
 	attack_ready = false
 	var anim := ability.anim_name if not ability.anim_name.is_empty() else ANIM_PUNCH
 	anim_player.play(anim)
-	VFX.spawn_cast_burst(get_parent(), muzzle_point.global_position, -global_transform.basis.z, ElementType.get_color(ability.element))
+	AbilityVFX.play_cast(ability, get_parent(), muzzle_point.global_position, -global_transform.basis.z, global_position + Vector3(0, 1.0, 0))
 	if multiplayer.has_multiplayer_peer():
 		_show_attack_anim.rpc(anim)
 
@@ -440,6 +452,7 @@ func _execute_projectile(ability: AbilityData) -> void:
 	projectile.lifetime = ability.projectile_lifetime
 	projectile.knockback_force = ability.knockback_force
 	projectile.stagger_duration = ability.stagger_duration
+	projectile.vfx_key = ability.vfx_key
 	projectile.shooter = self
 	get_parent().add_child(projectile)
 	projectile.global_transform = muzzle_point.global_transform
@@ -463,7 +476,7 @@ func _execute_hitscan(ability: AbilityData) -> void:
 	query.exclude = [self]
 	var result := space_state.intersect_ray(query)
 	var beam_end: Vector3 = result.position if result else to
-	VFX.spawn_beam(get_parent(), from, beam_end, ElementType.get_color(ability.element))
+	AbilityVFX.play_beam(ability, get_parent(), from, beam_end)
 	if result and result.collider is Player and result.collider != self:
 		var target: Player = result.collider
 		var dir := (target.global_position - global_position)
@@ -488,6 +501,7 @@ func _execute_cone(ability: AbilityData) -> void:
 	var dir := _knockback_dir_to_opponent(opponent, ability)
 	opponent.take_damage(ability.damage, ability.element, dir, ability.knockback_force, ability.stagger_duration)
 	_gain_special_meter()
+	AbilityVFX.play_landed(ability, get_parent(), opponent.global_position + Vector3(0, 1.0, 0))
 	if ability.burn_ticks > 0:
 		_apply_burn(ability, opponent)
 
@@ -505,8 +519,10 @@ func _execute_line(ability: AbilityData) -> void:
 	var dir := _knockback_dir_to_opponent(opponent, ability)
 	opponent.take_damage(ability.damage, ability.element, dir, ability.knockback_force, ability.stagger_duration)
 	_gain_special_meter()
+	AbilityVFX.play_landed(ability, get_parent(), opponent.global_position + Vector3(0, 1.0, 0))
 
 func _execute_self_buff(ability: AbilityData) -> void:
+	AbilityVFX.play_self_buff(ability, self)
 	match ability.self_buff_type:
 		"shield":
 			is_shielded = true
@@ -532,6 +548,7 @@ func _execute_self_buff(ability: AbilityData) -> void:
 
 func _execute_wall(ability: AbilityData) -> void:
 	var spawn_pos := global_position + Vector3(0, 1.0, 0) + (-global_transform.basis.z) * 3.0
+	AbilityVFX.play_wall_cast(get_parent(), spawn_pos, ElementType.get_color(ability.element))
 	var arena := get_parent()
 	if multiplayer.has_multiplayer_peer():
 		arena._spawn_wall.rpc(spawn_pos, rotation.y, ability.wall_duration)
@@ -541,9 +558,11 @@ func _execute_wall(ability: AbilityData) -> void:
 func _execute_teleport_strike(ability: AbilityData) -> void:
 	if not is_instance_valid(opponent):
 		return
+	var old_pos := global_position
 	var behind_dir := (opponent.global_position - global_position).normalized()
 	global_position = opponent.global_position + behind_dir * 1.2
 	look_at(Vector3(opponent.global_position.x, global_position.y, opponent.global_position.z), Vector3.UP)
+	AbilityVFX.play_teleport(get_parent(), old_pos, global_position, ElementType.get_color(ability.element))
 	var dir := opponent.global_position - global_position
 	opponent.take_damage(ability.damage, ability.element, dir, ability.knockback_force, ability.stagger_duration)
 	_gain_special_meter()
@@ -561,6 +580,7 @@ func _apply_burn(ability: AbilityData, target: Player) -> void:
 		await get_tree().create_timer(ability.burn_tick_interval).timeout
 		if not is_instance_valid(target):
 			return
+		AbilityVFX.play_burn_tick(get_parent(), target.global_position + Vector3(0, 1.0, 0))
 		target.take_damage(ability.burn_damage_per_tick, ElementType.Type.FIRE)
 
 func take_damage(amount: int, element: ElementType.Type = ElementType.Type.NONE, knockback_dir: Vector3 = Vector3.ZERO, knockback_force: float = 0.0, stagger_duration: float = 0.0) -> void:

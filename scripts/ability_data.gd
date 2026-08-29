@@ -66,3 +66,7 @@ enum Delivery {
 ## MULTI_HITSCAN only.
 @export var multi_hit_count: int = 1
 @export var multi_hit_interval: float = 0.3
+
+## Selects a bespoke VFX preset in AbilityVFX (see scripts/ability_vfx.gd).
+## Empty = fall back to the generic element-colored VFX (Ataque Básico/Golpes).
+@export var vfx_key: String = ""
