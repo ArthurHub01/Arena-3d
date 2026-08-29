@@ -24,6 +24,33 @@ static func _fade_ramp(color: Color, start_alpha: float = 1.0) -> GradientTextur
 	tex.gradient = fade
 	return tex
 
+## A soft radial-gradient billboard (bright core fading to transparent edge)
+## instead of a hard-edged flat sphere — reads as a glowing wisp of flame/
+## energy rather than a solid colored dot, closer to real VFX references.
+static func _soft_glow_material(color: Color, energy: float, alpha: float = 1.0) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	mat.albedo_color = Color(color.r, color.g, color.b, alpha)
+	mat.emission_enabled = true
+	mat.emission = color
+	mat.emission_energy_multiplier = energy
+
+	var gradient := Gradient.new()
+	gradient.set_color(0, Color(1.0, 1.0, 1.0, 1.0))
+	gradient.add_point(0.4, Color(1.0, 1.0, 1.0, 0.6))
+	gradient.set_color(1, Color(1.0, 1.0, 1.0, 0.0))
+	var tex := GradientTexture2D.new()
+	tex.gradient = gradient
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(1.0, 0.5)
+	tex.width = 32
+	tex.height = 32
+	mat.albedo_texture = tex
+	return mat
+
 static func _spawn_particle_layer(parent: Node, position: Vector3, color: Color, config: Dictionary) -> GPUParticles3D:
 	var particles := GPUParticles3D.new()
 	parent.add_child(particles)
@@ -34,10 +61,10 @@ static func _spawn_particle_layer(parent: Node, position: Vector3, color: Color,
 	particles.explosiveness = config.get("explosiveness", 0.9)
 	particles.emitting = true
 
-	var mesh := SphereMesh.new()
-	mesh.radius = config.get("mesh_radius", 0.06)
-	mesh.height = mesh.radius * 2.0
-	mesh.material = _make_unshaded_material(color, config.get("energy", 2.0))
+	var radius: float = config.get("mesh_radius", 0.06)
+	var mesh := QuadMesh.new()
+	mesh.size = Vector2(radius * 2.0, radius * 2.0)
+	mesh.material = _soft_glow_material(color, config.get("energy", 2.0), config.get("start_alpha", 1.0))
 	particles.draw_pass_1 = mesh
 
 	var process_mat := ParticleProcessMaterial.new()
