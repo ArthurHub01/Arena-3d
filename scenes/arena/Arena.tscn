@@ -1,12 +1,29 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://scenes/arena/arena.gd" id="1"]
 [ext_resource type="Script" path="res://scenes/arena/diamond_menu_icon.gd" id="2"]
 [ext_resource type="Script" path="res://scenes/arena/chevron_bar.gd" id="3"]
 [ext_resource type="Script" path="res://scenes/arena/heartbeat_icon.gd" id="4"]
 [ext_resource type="Material" path="res://assets/textures/floor/floor_material.tres" id="5"]
+[ext_resource type="Script" path="res://scenes/menu/ornate_frame.gd" id="6"]
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_1"]
+
+[sub_resource type="StyleBoxFlat" id="LoadingPanelStyle"]
+bg_color = Color(0.09, 0.075, 0.058, 0.85)
+border_color = Color(0.20, 0.165, 0.12, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_left = 4
+corner_radius_bottom_right = 4
+content_margin_left = 28
+content_margin_top = 26
+content_margin_right = 28
+content_margin_bottom = 26
 
 [sub_resource type="CylinderShape3D" id="FloorShape"]
 height = 60.0
@@ -266,3 +283,66 @@ offset_top = 26.0
 offset_right = 170.0
 offset_bottom = 66.0
 text = "Voltar ao menu"
+
+[node name="LoadingOverlay" type="Control" parent="HUD"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Dim" type="ColorRect" parent="HUD/LoadingOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.02, 0.016, 0.012, 0.82)
+
+[node name="CenterContainer" type="CenterContainer" parent="HUD/LoadingOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="HUD/LoadingOverlay/CenterContainer"]
+custom_minimum_size = Vector2(460, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("LoadingPanelStyle")
+
+[node name="Frame" type="Control" parent="HUD/LoadingOverlay/CenterContainer/Panel"]
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("6")
+
+[node name="Content" type="VBoxContainer" parent="HUD/LoadingOverlay/CenterContainer/Panel"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Title" type="Label" parent="HUD/LoadingOverlay/CenterContainer/Panel/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.925, 0.895, 0.84, 1)
+theme_override_font_sizes/font_size = 22
+horizontal_alignment = 1
+text = "PREPARANDO A BATALHA"
+
+[node name="TipLabel" type="Label" parent="HUD/LoadingOverlay/CenterContainer/Panel/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.63, 0.30, 1)
+theme_override_font_sizes/font_size = 16
+horizontal_alignment = 1
+autowrap_mode = 3
+text = ""
+
+[node name="CountdownLabel" type="Label" parent="HUD/LoadingOverlay/CenterContainer/Panel/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.48, 0.40, 1)
+theme_override_font_sizes/font_size = 13
+horizontal_alignment = 1
+text = ""

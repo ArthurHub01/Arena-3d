@@ -18,10 +18,23 @@ const PLAYER_SCENE: PackedScene = preload("res://scenes/player/Player.tscn")
 @onready var menu_text_button: Button = $HUD/HUDRoot/MenuTextButton
 @onready var menu_button: Button = $HUD/HUDRoot/MenuButton
 @onready var waiting_label: Label = $HUD/HUDRoot/WaitingLabel
+@onready var loading_overlay: Control = $HUD/LoadingOverlay
+@onready var loading_tip_label: Label = $HUD/LoadingOverlay/CenterContainer/Panel/Content/TipLabel
+@onready var loading_countdown_label: Label = $HUD/LoadingOverlay/CenterContainer/Panel/Content/CountdownLabel
 
 const MAIN_MENU_SCENE_PATH := "res://scenes/menu/MainMenu.tscn"
 const ROUNDS_TO_WIN := 2
 const ROUND_TRANSITION_DELAY := 2.5
+const PRE_MATCH_DURATION := 4.0
+const PRE_MATCH_TIP_INTERVAL := 2.0
+const PRE_MATCH_TIPS := [
+	"Mova-se com WASD e pule com Espaço.",
+	"Pressione Q para usar o ataque básico do seu elemento.",
+	"O nome do elemento de cada jogador aparece abaixo da barra de vida.",
+	"Ataques de Raio têm um pequeno atraso — desvie se movendo para o lado!",
+	"Vença 2 rodadas para ganhar a partida.",
+	"Depois do combate, aperte R para jogar novamente rapidinho.",
+]
 
 var round_manager: RoundManager = RoundManager.new()
 var player_one: Player
@@ -132,11 +145,36 @@ func _spawn_player(id: int, spawn_position: Vector3, is_first: bool, element: El
 	if player_one != null and player_two != null:
 		player_one.opponent = player_two
 		player_two.opponent = player_one
-		player_one.match_active = true
-		player_two.match_active = true
 		waiting_label.hide()
 		if lan_discovery:
 			lan_discovery.stop()
+		_begin_pre_match_sequence()
+
+func _begin_pre_match_sequence() -> void:
+	var tips := PRE_MATCH_TIPS.duplicate()
+	tips.shuffle()
+	var tip_index := 0
+	loading_tip_label.text = tips[tip_index]
+	var remaining := PRE_MATCH_DURATION
+	loading_countdown_label.text = "Começando em %d..." % int(ceil(remaining))
+	loading_overlay.show()
+
+	while remaining > 0.0:
+		var step: float = min(PRE_MATCH_TIP_INTERVAL, remaining)
+		await get_tree().create_timer(step).timeout
+		remaining -= step
+		if not is_instance_valid(self):
+			return
+		loading_countdown_label.text = "Começando em %d..." % int(ceil(remaining))
+		if remaining > 0.0:
+			tip_index = (tip_index + 1) % tips.size()
+			loading_tip_label.text = tips[tip_index]
+
+	loading_overlay.hide()
+	if is_instance_valid(player_one):
+		player_one.match_active = true
+	if is_instance_valid(player_two):
+		player_two.match_active = true
 
 func _wire_player(player: Player, hp_bar: ChevronBar, hp_label: Label) -> void:
 	hp_bar.max_value = player.stats.max_hp
