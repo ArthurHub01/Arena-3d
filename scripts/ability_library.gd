@@ -34,6 +34,7 @@ static func get_attack(element: ElementType.Type, slot: int) -> AbilityData:
 	data.stagger_duration = base.stagger_duration
 	data.combo_slot = slot
 	data.cast_time = 0.2 if power_level == 1 else 0.3
+	data.vfx_key = base.vfx_key
 	return data
 
 static func get_dodge(element: ElementType.Type, index: int) -> DodgeData:

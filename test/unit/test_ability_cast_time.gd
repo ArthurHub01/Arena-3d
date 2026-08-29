@@ -27,3 +27,7 @@ func test_suprema_self_buff_has_no_cast_time():
 func test_basic_ability_has_short_cast_time():
 	var base = AbilityLibrary.get_basic_ability(ElementType.Type.WATER)
 	assert_eq(base.cast_time, 0.15)
+
+func test_attack_slots_inherit_vfx_key_from_basic():
+	var attack9 = AbilityLibrary.get_attack(ElementType.Type.EARTH, 9)
+	assert_eq(attack9.vfx_key, "earth_basic")
