@@ -134,9 +134,9 @@ func _spawn_player(id: int, spawn_position: Vector3, is_first: bool, element: El
 	player.name = str(id)
 	player.is_local_player = (id == multiplayer.get_unique_id())
 	player.set_element(element)
+	add_child(player)
 	player.set_nickname(nickname)
 	player.set_color(color)
-	add_child(player)
 	player.global_position = spawn_position
 	player.set_multiplayer_authority(id)
 	players_by_id[id] = player
