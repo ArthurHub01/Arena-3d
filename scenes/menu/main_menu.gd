@@ -21,10 +21,12 @@ const DEFAULT_NICKNAME := "Jogador"
 @onready var element_list: VBoxContainer = $CenterContainer/Columns/RightPanel/RightContent/ElementScroll/ElementList
 @onready var discovered_list: VBoxContainer = $CenterContainer/Columns/LeftPanel/LeftContent/DiscoveredList
 @onready var nickname_input: LineEdit = $CenterContainer/Columns/LeftPanel/LeftContent/NicknameInput
+@onready var color_list: HBoxContainer = $CenterContainer/Columns/LeftPanel/LeftContent/ColorList
 
 var updater: GameUpdater
 var pending_download_url := ""
 var element_buttons: Dictionary = {}
+var color_buttons: Array = []
 var lan_discovery: LanDiscovery
 
 func _ready() -> void:
@@ -40,6 +42,7 @@ func _ready() -> void:
 	update_button.pressed.connect(_on_update_button_pressed)
 
 	_setup_element_buttons()
+	_setup_color_buttons()
 	_load_nickname()
 	nickname_input.text_changed.connect(_on_nickname_changed)
 
@@ -91,11 +94,28 @@ func _on_element_selected(element: ElementType.Type) -> void:
 		entry["label"].add_theme_color_override("font_color", UiTheme.COL_SIGNAL if is_selected else UiTheme.COL_INK_DIM)
 	element_name_label.text = ElementType.display_name(element)
 
+func _setup_color_buttons() -> void:
+	for button in color_list.get_children():
+		var swatch: Control = button.get_node("Swatch")
+		color_buttons.append({"button": button, "swatch": swatch})
+		button.pressed.connect(_on_color_selected.bind(swatch.swatch_color))
+
+func _on_color_selected(color: Color) -> void:
+	NetworkState.player_color = color
+	for entry in color_buttons:
+		entry["swatch"].selected = entry["swatch"].swatch_color.is_equal_approx(color)
+	var config := ConfigFile.new()
+	config.load(SETTINGS_PATH)
+	config.set_value("player", "color", color)
+	config.save(SETTINGS_PATH)
+
 func _load_nickname() -> void:
 	var config := ConfigFile.new()
 	if config.load(SETTINGS_PATH) == OK:
 		NetworkState.player_nickname = config.get_value("player", "nickname", DEFAULT_NICKNAME)
+		NetworkState.player_color = config.get_value("player", "color", NetworkState.player_color)
 	nickname_input.text = NetworkState.player_nickname
+	_on_color_selected(NetworkState.player_color)
 
 func _on_nickname_changed(new_text: String) -> void:
 	var nickname := new_text.strip_edges()
@@ -103,6 +123,7 @@ func _on_nickname_changed(new_text: String) -> void:
 		nickname = DEFAULT_NICKNAME
 	NetworkState.player_nickname = nickname
 	var config := ConfigFile.new()
+	config.load(SETTINGS_PATH)
 	config.set_value("player", "nickname", nickname)
 	config.save(SETTINGS_PATH)
 

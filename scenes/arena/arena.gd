@@ -2,6 +2,7 @@ extends Node3D
 class_name Arena
 
 const PLAYER_SCENE: PackedScene = preload("res://scenes/player/Player.tscn")
+const STONE_WALL_SCENE: PackedScene = preload("res://scenes/arena/StoneWall.tscn")
 
 @onready var spawn_p1: Marker3D = $SpawnP1
 @onready var spawn_p2: Marker3D = $SpawnP2
@@ -72,7 +73,7 @@ func _ready() -> void:
 			return
 		multiplayer.multiplayer_peer = peer
 		multiplayer.peer_disconnected.connect(_on_peer_disconnected)
-		_spawn_player(1, spawn_p1.global_position, true, NetworkState.selected_element, NetworkState.player_nickname)
+		_spawn_player(1, spawn_p1.global_position, true, NetworkState.selected_element, NetworkState.player_nickname, NetworkState.player_color)
 		waiting_label.show()
 		lan_discovery = LanDiscovery.new()
 		add_child(lan_discovery)
@@ -88,24 +89,24 @@ func _ready() -> void:
 		multiplayer.connected_to_server.connect(_on_connected_to_server)
 
 func _start_vs_computer() -> void:
-	_spawn_player(1, spawn_p1.global_position, true, NetworkState.selected_element, NetworkState.player_nickname)
+	_spawn_player(1, spawn_p1.global_position, true, NetworkState.selected_element, NetworkState.player_nickname, NetworkState.player_color)
 	var ai_elements := [ElementType.Type.FIRE, ElementType.Type.WATER, ElementType.Type.EARTH, ElementType.Type.AIR, ElementType.Type.LIGHTNING]
 	ai_elements.erase(NetworkState.selected_element)
 	var ai_element: ElementType.Type = ai_elements[randi() % ai_elements.size()] if not ai_elements.is_empty() else NetworkState.selected_element
-	_spawn_player(2, spawn_p2.global_position, false, ai_element, "CPU")
+	_spawn_player(2, spawn_p2.global_position, false, ai_element, "CPU", Color(0.2, 0.2, 0.2, 1))
 	player_two.is_ai_controlled = true
 
 func _on_connected_to_server() -> void:
-	_report_element.rpc_id(1, NetworkState.selected_element, NetworkState.player_nickname)
+	_report_element.rpc_id(1, NetworkState.selected_element, NetworkState.player_nickname, NetworkState.player_color)
 
 @rpc("any_peer", "reliable")
-func _report_element(element: ElementType.Type, nickname: String) -> void:
+func _report_element(element: ElementType.Type, nickname: String, color: Color) -> void:
 	if not multiplayer.is_server():
 		return
 	var sender_id := multiplayer.get_remote_sender_id()
-	_spawn_player(sender_id, spawn_p2.global_position, false, element, nickname)
-	_spawn_player_rpc.rpc_id(sender_id, 1, spawn_p1.global_position, true, NetworkState.selected_element, NetworkState.player_nickname)
-	_spawn_player_rpc.rpc_id(sender_id, sender_id, spawn_p2.global_position, false, element, nickname)
+	_spawn_player(sender_id, spawn_p2.global_position, false, element, nickname, color)
+	_spawn_player_rpc.rpc_id(sender_id, 1, spawn_p1.global_position, true, NetworkState.selected_element, NetworkState.player_nickname, NetworkState.player_color)
+	_spawn_player_rpc.rpc_id(sender_id, sender_id, spawn_p2.global_position, false, element, nickname, color)
 
 func _on_peer_disconnected(id: int) -> void:
 	if players_by_id.has(id):
@@ -125,15 +126,16 @@ func _on_peer_disconnected(id: int) -> void:
 		waiting_label.show()
 
 @rpc("any_peer", "reliable")
-func _spawn_player_rpc(id: int, spawn_position: Vector3, is_first: bool, element: ElementType.Type, nickname: String) -> void:
-	_spawn_player(id, spawn_position, is_first, element, nickname)
+func _spawn_player_rpc(id: int, spawn_position: Vector3, is_first: bool, element: ElementType.Type, nickname: String, color: Color) -> void:
+	_spawn_player(id, spawn_position, is_first, element, nickname, color)
 
-func _spawn_player(id: int, spawn_position: Vector3, is_first: bool, element: ElementType.Type, nickname: String) -> void:
+func _spawn_player(id: int, spawn_position: Vector3, is_first: bool, element: ElementType.Type, nickname: String, color: Color) -> void:
 	var player: Player = PLAYER_SCENE.instantiate()
 	player.name = str(id)
 	player.is_local_player = (id == multiplayer.get_unique_id())
 	player.set_element(element)
 	player.set_nickname(nickname)
+	player.set_color(color)
 	add_child(player)
 	player.global_position = spawn_position
 	player.set_multiplayer_authority(id)
@@ -304,3 +306,11 @@ func _on_menu_button_pressed() -> void:
 		multiplayer.multiplayer_peer = null
 	NetworkState.vs_computer = false
 	get_tree().change_scene_to_file(MAIN_MENU_SCENE_PATH)
+
+@rpc("any_peer", "call_local", "reliable")
+func _spawn_wall(spawn_position: Vector3, rotation_y: float, duration: float) -> void:
+	var wall: StoneWall = STONE_WALL_SCENE.instantiate()
+	add_child(wall)
+	wall.global_position = spawn_position
+	wall.rotation.y = rotation_y
+	wall.setup(duration)
