@@ -24,6 +24,9 @@ enum Delivery {
 ## HITSCAN only: max distance the instant hit can reach.
 @export var hitscan_range: float = 25.0
 
+## HITSCAN only: delay between aiming and the hit resolving, so the target has time to dodge.
+@export var hitscan_delay: float = 0.25
+
 ## On-hit effects, shared by any delivery type. 0 = no effect.
 @export var knockback_force: float = 0.0
 @export var stagger_duration: float = 0.0

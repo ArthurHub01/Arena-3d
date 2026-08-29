@@ -263,12 +263,18 @@ func _execute_projectile() -> void:
 		projectile.rotate_y(_ai_aim_spread_rad())
 
 func _execute_hitscan() -> void:
-	var space_state := get_world_3d().direct_space_state
 	var from := muzzle_point.global_position
 	var aim_dir := -global_transform.basis.z
 	if is_ai_controlled:
 		aim_dir = aim_dir.rotated(Vector3.UP, _ai_aim_spread_rad())
 	var to := from + aim_dir * basic_ability.hitscan_range
+
+	if basic_ability.hitscan_delay > 0.0:
+		await get_tree().create_timer(basic_ability.hitscan_delay).timeout
+	if not is_instance_valid(self) or is_queued_for_deletion():
+		return
+
+	var space_state := get_world_3d().direct_space_state
 	var query := PhysicsRayQueryParameters3D.create(from, to, 2)
 	query.exclude = [self]
 	var result := space_state.intersect_ray(query)
