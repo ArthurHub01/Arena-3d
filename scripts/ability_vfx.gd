@@ -430,46 +430,77 @@ static func _spawn_static_dome(follow_node: Node3D, color: Color) -> MeshInstanc
 	mesh_inst.position = Vector3(0, 1.0, 0)
 	return mesh_inst
 
-## A slab of rock that rises out of the ground just in front of the player
-## (not around them) — grows from a thin sliver into a full wall.
-static func _spawn_rising_wall(follow_node: Node3D, color: Color) -> MeshInstance3D:
-	var mesh_inst := MeshInstance3D.new()
-	var mesh := BoxMesh.new()
-	mesh.size = Vector3(1.7, 1.8, 0.35)
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = color.darkened(0.25)
-	mat.roughness = 0.95
-	mat.metallic = 0.0
-	mesh.material = mat
-	mesh_inst.mesh = mesh
-	follow_node.add_child(mesh_inst)
-	mesh_inst.position = Vector3(0, 0.9, -1.1)
-	mesh_inst.scale = Vector3(1, 0.04, 1)
+## Kite-shield silhouette (local x, y offsets, feet-relative) built from
+## individually jagged rock chunks — widest at the top, tapering to a point,
+## echoing a hand-forged stone shield rather than a flat slab.
+const _EARTH_SHIELD_CHUNKS := [
+	Vector2(-0.5, 1.66), Vector2(0.0, 1.8), Vector2(0.5, 1.66),
+	Vector2(-0.82, 1.34), Vector2(-0.27, 1.42), Vector2(0.27, 1.42), Vector2(0.82, 1.34),
+	Vector2(-0.6, 1.0), Vector2(0.0, 1.08), Vector2(0.6, 1.0),
+	Vector2(-0.33, 0.68), Vector2(0.33, 0.68),
+	Vector2(0.0, 0.36),
+]
+
+## Round-topped shield of rock chunks that fly in from scattered directions
+## and assemble in front of the player, as if pulled together from the
+## ground — not a single flat slab.
+static func _spawn_earth_shield(follow_node: Node3D, color: Color) -> Node3D:
+	var root := Node3D.new()
+	follow_node.add_child(root)
+	root.position = Vector3(0, 0, -1.05)
+	root.scale = Vector3.ONE
 
 	var tree := follow_node.get_tree()
-	if tree:
-		VFX._spawn_particle_layer(follow_node, Vector3(0, 0.05, -1.1), color.darkened(0.2), {
-			"amount": 12, "lifetime": 0.4, "explosiveness": 1.0,
-			"mesh_radius": 0.09, "energy": 0.5, "start_alpha": 0.6,
-			"spread": 100.0, "velocity_min": 0.8, "velocity_max": 1.8,
-			"gravity": Vector3(0, -1.0, 0), "scale_min": 0.7, "scale_max": 1.3,
-		})
-		var tween := tree.create_tween()
-		tween.tween_property(mesh_inst, "scale:y", 1.0, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	return mesh_inst
+	VFX._spawn_particle_layer(follow_node, Vector3(0, 0.05, -1.05), color.darkened(0.2), {
+		"amount": 14, "lifetime": 0.45, "explosiveness": 1.0,
+		"mesh_radius": 0.08, "energy": 0.5, "start_alpha": 0.6,
+		"spread": 110.0, "velocity_min": 0.8, "velocity_max": 2.0,
+		"gravity": Vector3(0, -1.0, 0), "scale_min": 0.7, "scale_max": 1.3,
+	})
 
-static func _sink_and_free_wall(mesh_inst: MeshInstance3D) -> void:
-	if not is_instance_valid(mesh_inst):
+	for slot in _EARTH_SHIELD_CHUNKS:
+		var chunk := MeshInstance3D.new()
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3(
+			randf_range(0.55, 0.85), randf_range(0.5, 0.8), randf_range(0.35, 0.55)
+		)
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = color.darkened(randf_range(0.0, 0.3)).lightened(randf_range(0.0, 0.08))
+		mat.roughness = 0.95
+		mat.metallic = 0.0
+		mesh.material = mat
+		chunk.mesh = mesh
+		root.add_child(chunk)
+
+		var final_pos := Vector3(slot.x, slot.y, randf_range(-0.12, 0.12))
+		var final_rot := Vector3(randf_range(-0.5, 0.5), randf_range(-0.6, 0.6), randf_range(-0.5, 0.5))
+		var scatter_dir := Vector3(randf_range(-1.0, 1.0), randf_range(-0.2, 0.7), randf_range(-1.0, 1.0)).normalized()
+		chunk.position = final_pos + scatter_dir * randf_range(1.6, 2.6)
+		chunk.rotation = Vector3(randf_range(-PI, PI), randf_range(-PI, PI), randf_range(-PI, PI))
+		chunk.scale = Vector3.ONE * 0.25
+
+		if tree:
+			var tween := tree.create_tween()
+			tween.tween_interval(randf_range(0.0, 0.1))
+			tween.set_parallel(true)
+			tween.tween_property(chunk, "position", final_pos, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tween.tween_property(chunk, "rotation", final_rot, 0.3).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+			tween.tween_property(chunk, "scale", Vector3.ONE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	return root
+
+static func _crumble_and_free_shield(root: Node3D) -> void:
+	if not is_instance_valid(root):
 		return
-	var tree := mesh_inst.get_tree()
+	var tree := root.get_tree()
 	if tree == null:
-		mesh_inst.queue_free()
+		root.queue_free()
 		return
 	var tween := tree.create_tween()
-	tween.tween_property(mesh_inst, "scale:y", 0.04, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	tween.tween_property(root, "scale", Vector3.ONE * 0.05, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	tween.parallel().tween_property(root, "position:y", root.position.y - 0.5, 0.22).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
 	tween.tween_callback(func():
-		if is_instance_valid(mesh_inst):
-			mesh_inst.queue_free()
+		if is_instance_valid(root):
+			root.queue_free()
 	)
 
 ## Returns a handle (Dictionary) to pass into stop_block_stance() later.
@@ -486,9 +517,9 @@ static func start_block_stance(element: ElementType.Type, player: Node3D) -> Dic
 			particles.position = Vector3(0, 1.0, 0)
 			handle["particles"] = particles
 		ElementType.Type.EARTH:
-			var wall := _spawn_rising_wall(player, color)
-			handle["mesh"] = wall
-			handle["on_stop"] = func(): _sink_and_free_wall(wall)
+			var shield := _spawn_earth_shield(player, color)
+			handle["mesh"] = shield
+			handle["on_stop"] = func(): _crumble_and_free_shield(shield)
 		ElementType.Type.AIR:
 			handle["mesh"] = _spawn_static_dome(player, color)
 		ElementType.Type.LIGHTNING:
