@@ -10,6 +10,14 @@ enum Type {
 	LIGHTNING,
 }
 
+## Elements playable right now — Água/Ar/Raios are built but locked ("em breve")
+## while balance/content work focuses on Fogo and Terra first.
+static func available_elements() -> Array[Type]:
+	return [Type.FIRE, Type.EARTH]
+
+static func is_available(type: Type) -> bool:
+	return type in available_elements()
+
 static func get_color(type: Type) -> Color:
 	match type:
 		Type.FIRE:

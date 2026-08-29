@@ -44,16 +44,33 @@ func _setup_element_buttons() -> void:
 		var icon: ElementIcon = row.get_node("ElementIcon")
 		var name_label: Label = row.get_node("Name")
 		element_buttons[icon.element] = {"icon": icon, "label": name_label}
-		button.pressed.connect(_on_element_selected.bind(icon.element))
-	_on_element_selected(NetworkState.selected_element)
+		if ElementType.is_available(icon.element):
+			button.pressed.connect(_on_element_selected.bind(icon.element))
+		else:
+			button.disabled = true
+			icon.modulate = Color(1, 1, 1, 0.35)
+			var soon_label := Label.new()
+			soon_label.text = "EM BREVE"
+			soon_label.add_theme_color_override("font_color", UiTheme.COL_INK_DIM)
+			soon_label.add_theme_font_size_override("font_size", 11)
+			soon_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			soon_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			row.add_child(soon_label)
+	var initial := NetworkState.selected_element
+	if not ElementType.is_available(initial):
+		initial = ElementType.Type.FIRE
+	_on_element_selected(initial)
 
 func _on_element_selected(element: ElementType.Type) -> void:
+	if not ElementType.is_available(element):
+		return
 	NetworkState.selected_element = element
 	for el in element_buttons:
 		var entry: Dictionary = element_buttons[el]
 		var is_selected: bool = (el == element)
 		entry["icon"].selected = is_selected
-		entry["label"].add_theme_color_override("font_color", UiTheme.COL_SIGNAL if is_selected else UiTheme.COL_INK_DIM)
+		if ElementType.is_available(el):
+			entry["label"].add_theme_color_override("font_color", UiTheme.COL_SIGNAL if is_selected else UiTheme.COL_INK_DIM)
 	element_name_label.text = ElementType.display_name(element)
 
 func _setup_color_buttons() -> void:

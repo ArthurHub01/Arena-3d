@@ -91,7 +91,7 @@ func _ready() -> void:
 
 func _start_vs_computer() -> void:
 	_spawn_player(1, spawn_p1.global_position, true, NetworkState.selected_element, NetworkState.player_nickname, NetworkState.player_color, NetworkState.selected_character_id)
-	var ai_elements := [ElementType.Type.FIRE, ElementType.Type.WATER, ElementType.Type.EARTH, ElementType.Type.AIR, ElementType.Type.LIGHTNING]
+	var ai_elements: Array = ElementType.available_elements().duplicate()
 	ai_elements.erase(NetworkState.selected_element)
 	var ai_element: ElementType.Type = ai_elements[randi() % ai_elements.size()] if not ai_elements.is_empty() else NetworkState.selected_element
 	_spawn_player(2, spawn_p2.global_position, false, ai_element, "CPU", Color(0.2, 0.2, 0.2, 1), "default")
