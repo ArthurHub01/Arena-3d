@@ -4,20 +4,20 @@ class_name MainMenu
 const PORT := 8910
 const ARENA_SCENE_PATH := "res://scenes/arena/Arena.tscn"
 
-@onready var host_button: Button = $CenterContainer/Panel/HostButton
-@onready var vs_computer_button: Button = $CenterContainer/Panel/VsComputerButton
-@onready var ip_input: LineEdit = $CenterContainer/Panel/HBoxContainer/IpInput
-@onready var join_button: Button = $CenterContainer/Panel/HBoxContainer/JoinButton
-@onready var status_label: Label = $CenterContainer/Panel/StatusLabel
+@onready var host_button: Button = $CenterContainer/Columns/LeftPanel/LeftContent/HostButton
+@onready var vs_computer_button: Button = $CenterContainer/Columns/LeftPanel/LeftContent/VsComputerButton
+@onready var ip_input: LineEdit = $CenterContainer/Columns/LeftPanel/LeftContent/HBoxContainer/IpInput
+@onready var join_button: Button = $CenterContainer/Columns/LeftPanel/LeftContent/HBoxContainer/JoinButton
+@onready var status_label: Label = $CenterContainer/Columns/LeftPanel/LeftContent/StatusLabel
 @onready var version_label: Label = $VersionLabel
-@onready var update_button: Button = $CenterContainer/Panel/UpdateButton
-@onready var title_label: Label = $CenterContainer/Panel/Title
-@onready var eyebrow_label: Label = $CenterContainer/Panel/Eyebrow
-@onready var divider_label: Label = $CenterContainer/Panel/Divider
-@onready var element_label: Label = $CenterContainer/Panel/ElementLabel
-@onready var element_name_label: Label = $CenterContainer/Panel/ElementNameLabel
-@onready var element_row: HBoxContainer = $CenterContainer/Panel/ElementRow
-@onready var discovered_list: VBoxContainer = $CenterContainer/Panel/DiscoveredList
+@onready var update_button: Button = $CenterContainer/Columns/LeftPanel/LeftContent/UpdateButton
+@onready var title_label: Label = $CenterContainer/Columns/LeftPanel/LeftContent/Title
+@onready var eyebrow_label: Label = $CenterContainer/Columns/LeftPanel/LeftContent/Eyebrow
+@onready var divider_label: Label = $CenterContainer/Columns/LeftPanel/LeftContent/Divider
+@onready var element_label: Label = $CenterContainer/Columns/RightPanel/RightContent/ElementEyebrow
+@onready var element_name_label: Label = $CenterContainer/Columns/RightPanel/RightContent/ElementNameLabel
+@onready var element_list: VBoxContainer = $CenterContainer/Columns/RightPanel/RightContent/ElementScroll/ElementList
+@onready var discovered_list: VBoxContainer = $CenterContainer/Columns/LeftPanel/LeftContent/DiscoveredList
 
 var updater: GameUpdater
 var pending_download_url := ""
@@ -69,16 +69,21 @@ func _on_lan_host_found(ip: String) -> void:
 	discovered_list.add_child(button)
 
 func _setup_element_buttons() -> void:
-	for button in element_row.get_children():
-		var icon: ElementIcon = button.get_child(0)
-		element_buttons[icon.element] = icon
+	for button in element_list.get_children():
+		var row: HBoxContainer = button.get_node("Row")
+		var icon: ElementIcon = row.get_node("ElementIcon")
+		var name_label: Label = row.get_node("Name")
+		element_buttons[icon.element] = {"icon": icon, "label": name_label}
 		button.pressed.connect(_on_element_selected.bind(icon.element))
 	_on_element_selected(NetworkState.selected_element)
 
 func _on_element_selected(element: ElementType.Type) -> void:
 	NetworkState.selected_element = element
 	for el in element_buttons:
-		element_buttons[el].selected = (el == element)
+		var entry: Dictionary = element_buttons[el]
+		var is_selected: bool = (el == element)
+		entry["icon"].selected = is_selected
+		entry["label"].add_theme_color_override("font_color", UiTheme.COL_SIGNAL if is_selected else UiTheme.COL_INK_DIM)
 	element_name_label.text = ElementType.display_name(element)
 
 func _check_cmdline_autoconnect() -> void:
