@@ -53,6 +53,7 @@ const ANIM_RUN := "run"
 const ANIM_PUNCH := "punch"
 const ANIM_DEATH := "death"
 const ANIM_DODGE_SIDE := "dodge_side"
+const ANIM_DODGE_SIDE_TARGET_DURATION := 0.5
 const RUN_SPEED_RATIO_THRESHOLD := 1.1
 
 const HIT_ANIMS := {
@@ -94,6 +95,7 @@ var _invincible_timer: float = 0.0
 var _dodge_dir: Vector3 = Vector3.ZERO
 var _dodge_timer: float = 0.0
 var _dodge_speed: float = 0.0
+var _dodge_cooldown_timer: float = 0.0
 
 var is_shielded: bool = false
 var _shield_timer: float = 0.0
@@ -253,8 +255,11 @@ func _try_dodge() -> void:
 	if family == "":
 		is_blocking = true
 		return
+	if _dodge_cooldown_timer > 0.0:
+		return
 	var dodge := AbilityLibrary.get_dodge(equipped_element, DODGE_INDEX_MAP[family])
 	_perform_dodge(dodge, family)
+	_dodge_cooldown_timer = dodge.cooldown
 
 func _perform_dodge(dodge: DodgeData, family: String) -> void:
 	var local_dir: Vector3 = DODGE_LOCAL_DIR[family]
@@ -265,8 +270,11 @@ func _perform_dodge(dodge: DodgeData, family: String) -> void:
 	_invincible_timer = dodge.iframe_duration
 	if family == "A" or family == "D":
 		anim_player.play(ANIM_DODGE_SIDE)
+		var clip := anim_player.get_animation(ANIM_DODGE_SIDE)
+		var dodge_speed_scale: float = (clip.length / ANIM_DODGE_SIDE_TARGET_DURATION) if clip else 1.0
+		anim_player.speed_scale = dodge_speed_scale
 		if multiplayer.has_multiplayer_peer():
-			_show_attack_anim.rpc(ANIM_DODGE_SIDE)
+			_show_attack_anim.rpc(ANIM_DODGE_SIDE, dodge_speed_scale)
 
 func _gain_special_meter() -> void:
 	special_meter = min(SPECIAL_METER_MAX, special_meter + SPECIAL_METER_PER_HIT)
@@ -284,6 +292,8 @@ func _physics_process(delta: float) -> void:
 		_invincible_timer -= delta
 		if _invincible_timer <= 0.0:
 			is_invincible = false
+	if _dodge_cooldown_timer > 0.0:
+		_dodge_cooldown_timer -= delta
 	if _shield_timer > 0.0:
 		_shield_timer -= delta
 		if _shield_timer <= 0.0:
@@ -451,8 +461,9 @@ func _ai_aim_spread_rad() -> float:
 	return deg_to_rad(randf_range(-AI_AIM_SPREAD_DEGREES, AI_AIM_SPREAD_DEGREES))
 
 @rpc("unreliable_ordered", "call_remote")
-func _show_attack_anim(anim: String) -> void:
+func _show_attack_anim(anim: String, speed_scale: float = 1.0) -> void:
 	anim_player.play(anim)
+	anim_player.speed_scale = speed_scale
 
 ## Networked replicas of the AbilityVFX.play_* calls below, so the bespoke
 ## per-ability visuals show up for the opponent's peer too, not just the
@@ -751,6 +762,7 @@ func reset_player(spawn_position: Vector3) -> void:
 	is_invincible = false
 	_invincible_timer = 0.0
 	_dodge_timer = 0.0
+	_dodge_cooldown_timer = 0.0
 	is_shielded = false
 	_shield_timer = 0.0
 	damage_mitigation = 0.0

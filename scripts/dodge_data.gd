@@ -9,6 +9,7 @@ extends Resource
 @export var dash_speed: float = 18.0
 @export var dash_duration: float = 0.18
 @export var iframe_duration: float = 0.2
+@export var cooldown: float = 0.6
 
 ## Block (index 5) only.
 @export var is_block: bool = false

@@ -49,6 +49,7 @@ static func get_dodge(element: ElementType.Type, index: int) -> DodgeData:
 		data.dash_speed = 18.0
 		data.dash_duration = 0.18
 		data.iframe_duration = 0.2
+		data.cooldown = 0.6
 	return data
 
 static func _base_ability(name: String, element: ElementType.Type, delivery: AbilityData.Delivery, anim_name: String) -> AbilityData:
