@@ -9,5 +9,5 @@ element = 5
 damage = 10
 cooldown = 0.6
 delivery = 2
-anim_name = "Human Armature|Punch"
+anim_name = "cast_lightning"
 hitscan_range = 30.0

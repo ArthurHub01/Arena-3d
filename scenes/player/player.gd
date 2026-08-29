@@ -25,9 +25,19 @@ const AI_RANGE_BUFFER := 1.5
 const AI_MISS_CHANCE := 0.3
 const AI_AIM_SPREAD_DEGREES := 14.0
 
-const ANIM_IDLE := "Human Armature|Idle"
-const ANIM_WALK := "Human Armature|Walk"
-const ANIM_PUNCH := "Human Armature|Punch"
+const ANIM_IDLE := "idle"
+const ANIM_WALK := "walk"
+const ANIM_RUN := "run"
+const ANIM_PUNCH := "punch"
+const ANIM_DEATH := "death"
+const RUN_SPEED_RATIO_THRESHOLD := 1.1
+
+const HIT_ANIMS := {
+	"front": "hit_front",
+	"back": "hit_back",
+	"left": "hit_left",
+	"right": "hit_right",
+}
 
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var camera: Camera3D = $CameraPivot/Camera3D
@@ -73,7 +83,6 @@ func _remote_update_transform(pos: Vector3, rot_y: float) -> void:
 func _ready() -> void:
 	camera.current = is_local_player
 	anim_player.play(ANIM_IDLE)
-	_apply_body_color()
 	var melee_shape: CollisionShape3D = melee_area.get_child(0)
 	melee_shape.shape = melee_shape.shape.duplicate()
 
@@ -87,34 +96,21 @@ func _model_yaw_from_local_dir(local_dir: Vector2) -> float:
 		return 0.0
 	return atan2(-local_dir.x, -local_dir.y)
 
-func _apply_body_color() -> void:
-	var mesh_instance := _find_mesh_instance($ModelRoot)
-	if mesh_instance == null:
-		return
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.75, 0.58, 0.46, 1.0)
-	mat.roughness = 0.85
-	mesh_instance.material_override = mat
-
-func _find_mesh_instance(node: Node) -> MeshInstance3D:
-	if node is MeshInstance3D:
-		return node
-	for child in node.get_children():
-		var found := _find_mesh_instance(child)
-		if found != null:
-			return found
-	return null
+func _is_action_anim_playing() -> bool:
+	var current := anim_player.current_animation
+	return anim_player.is_playing() and (current == ANIM_PUNCH or current == ANIM_DEATH or HIT_ANIMS.values().has(current) or current.begins_with("cast_"))
 
 func _play_locomotion_anim(is_moving: bool, speed_ratio: float = 1.0) -> void:
-	if anim_player.current_animation == ANIM_PUNCH and anim_player.is_playing():
+	if _is_action_anim_playing():
 		return
 	if not is_moving:
 		if anim_player.current_animation != ANIM_IDLE:
 			anim_player.play(ANIM_IDLE)
 		anim_player.speed_scale = 1.0
 		return
-	if anim_player.current_animation != ANIM_WALK:
-		anim_player.play(ANIM_WALK)
+	var target_anim := ANIM_RUN if speed_ratio > RUN_SPEED_RATIO_THRESHOLD else ANIM_WALK
+	if anim_player.current_animation != target_anim:
+		anim_player.play(target_anim)
 	anim_player.speed_scale = clamp(speed_ratio, 0.6, 1.8)
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -298,6 +294,18 @@ func _request_damage(amount: int, element: ElementType.Type = ElementType.Type.N
 		return
 	_apply_damage.rpc(amount, element, knockback_dir, knockback_force, stagger_duration)
 
+func _hit_direction_anim(knockback_dir: Vector3) -> String:
+	if knockback_dir.length() < 0.01:
+		return HIT_ANIMS["front"]
+	var hit_dir := -knockback_dir
+	hit_dir.y = 0.0
+	hit_dir = hit_dir.normalized()
+	var forward_amount := hit_dir.dot(-global_transform.basis.z)
+	var right_amount := hit_dir.dot(global_transform.basis.x)
+	if abs(forward_amount) >= abs(right_amount):
+		return HIT_ANIMS["front"] if forward_amount >= 0.0 else HIT_ANIMS["back"]
+	return HIT_ANIMS["right"] if right_amount >= 0.0 else HIT_ANIMS["left"]
+
 @rpc("call_local", "reliable", "any_peer")
 func _apply_damage(amount: int, element: ElementType.Type = ElementType.Type.NONE, knockback_dir: Vector3 = Vector3.ZERO, knockback_force: float = 0.0, stagger_duration: float = 0.0) -> void:
 	last_hit_element = element
@@ -310,7 +318,10 @@ func _apply_damage(amount: int, element: ElementType.Type = ElementType.Type.NON
 	if stagger_duration > 0.0:
 		stagger_timer = max(stagger_timer, stagger_duration)
 	if stats.is_dead():
+		anim_player.play(ANIM_DEATH)
 		died.emit()
+	else:
+		anim_player.play(_hit_direction_anim(knockback_dir))
 
 func reset_player(spawn_position: Vector3) -> void:
 	stats.reset()
@@ -318,3 +329,4 @@ func reset_player(spawn_position: Vector3) -> void:
 	velocity = Vector3.ZERO
 	stagger_timer = 0.0
 	damaged.emit(stats.current_hp)
+	anim_player.play(ANIM_IDLE)

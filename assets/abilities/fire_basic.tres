@@ -9,6 +9,6 @@ element = 1
 damage = 8
 cooldown = 0.5
 delivery = 1
-anim_name = "Human Armature|Punch"
+anim_name = "cast_fire"
 projectile_speed = 20.0
 projectile_lifetime = 2.5

@@ -9,5 +9,5 @@ element = 2
 damage = 12
 cooldown = 0.5
 delivery = 0
-anim_name = "Human Armature|Punch"
+anim_name = "cast_water"
 melee_range = 1.6
