@@ -21,6 +21,7 @@ const ANIM_SOURCES := {
 	"cast_earth": "cast_earth",
 	"cast_air": "cast_air",
 	"cast_lightning": "cast_lightning",
+	"dodge_side": "dodge_side",
 }
 
 func _load_clip(file_key: String) -> Animation:
@@ -57,7 +58,7 @@ func _initialize() -> void:
 	for out_name in ANIM_SOURCES.keys():
 		var clip: Animation = _load_clip(ANIM_SOURCES[out_name])
 		clip.resource_name = out_name
-		if out_name in ["idle", "cast_fire", "cast_water", "cast_earth", "cast_air", "cast_lightning", "punch", "hit_front", "hit_back", "hit_left", "hit_right", "death"]:
+		if out_name in ["idle", "cast_fire", "cast_water", "cast_earth", "cast_air", "cast_lightning", "punch", "hit_front", "hit_back", "hit_left", "hit_right", "death", "dodge_side"]:
 			clip.loop_mode = Animation.LOOP_NONE if out_name != "idle" else Animation.LOOP_LINEAR
 		if out_name in ["walk", "run"]:
 			clip.loop_mode = Animation.LOOP_LINEAR

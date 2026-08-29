@@ -52,6 +52,7 @@ const ANIM_WALK := "walk"
 const ANIM_RUN := "run"
 const ANIM_PUNCH := "punch"
 const ANIM_DEATH := "death"
+const ANIM_DODGE_SIDE := "dodge_side"
 const RUN_SPEED_RATIO_THRESHOLD := 1.1
 
 const HIT_ANIMS := {
@@ -178,7 +179,7 @@ func _model_yaw_from_local_dir(local_dir: Vector2) -> float:
 
 func _is_action_anim_playing() -> bool:
 	var current := anim_player.current_animation
-	return anim_player.is_playing() and (current == ANIM_PUNCH or current == ANIM_DEATH or HIT_ANIMS.values().has(current) or current.begins_with("cast_"))
+	return anim_player.is_playing() and (current == ANIM_PUNCH or current == ANIM_DEATH or current == ANIM_DODGE_SIDE or HIT_ANIMS.values().has(current) or current.begins_with("cast_"))
 
 func _play_locomotion_anim(is_moving: bool, speed_ratio: float = 1.0) -> void:
 	if _is_action_anim_playing():
@@ -262,6 +263,10 @@ func _perform_dodge(dodge: DodgeData, family: String) -> void:
 	_dodge_timer = dodge.dash_duration
 	is_invincible = true
 	_invincible_timer = dodge.iframe_duration
+	if family == "A" or family == "D":
+		anim_player.play(ANIM_DODGE_SIDE)
+		if multiplayer.has_multiplayer_peer():
+			_show_attack_anim.rpc(ANIM_DODGE_SIDE)
 
 func _gain_special_meter() -> void:
 	special_meter = min(SPECIAL_METER_MAX, special_meter + SPECIAL_METER_PER_HIT)
