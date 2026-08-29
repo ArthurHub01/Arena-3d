@@ -17,10 +17,12 @@ const ARENA_SCENE_PATH := "res://scenes/arena/Arena.tscn"
 @onready var element_label: Label = $CenterContainer/Panel/ElementLabel
 @onready var element_name_label: Label = $CenterContainer/Panel/ElementNameLabel
 @onready var element_row: HBoxContainer = $CenterContainer/Panel/ElementRow
+@onready var discovered_list: VBoxContainer = $CenterContainer/Panel/DiscoveredList
 
 var updater: GameUpdater
 var pending_download_url := ""
 var element_buttons: Dictionary = {}
+var lan_discovery: LanDiscovery
 
 func _ready() -> void:
 	theme = UiTheme.build()
@@ -50,7 +52,21 @@ func _ready() -> void:
 	update_button.text = "Verificar atualização"
 	updater.check_for_update()
 
+	lan_discovery = LanDiscovery.new()
+	add_child(lan_discovery)
+	lan_discovery.host_found.connect(_on_lan_host_found)
+	lan_discovery.start_listening()
+
 	_check_cmdline_autoconnect()
+
+func _on_lan_host_found(ip: String) -> void:
+	var button := Button.new()
+	button.text = "Entrar na partida encontrada (%s)" % ip
+	button.pressed.connect(func():
+		ip_input.text = ip
+		_on_join_pressed()
+	)
+	discovered_list.add_child(button)
 
 func _setup_element_buttons() -> void:
 	for button in element_row.get_children():

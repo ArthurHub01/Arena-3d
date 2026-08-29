@@ -32,6 +32,7 @@ var pending_round_continue: bool = false
 var match_score_p1: int = 0
 var match_score_p2: int = 0
 var players_by_id: Dictionary = {}
+var lan_discovery: LanDiscovery
 
 func _ready() -> void:
 	hud_root.theme = UiTheme.build()
@@ -55,6 +56,9 @@ func _ready() -> void:
 		multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 		_spawn_player(1, spawn_p1.global_position, true, NetworkState.selected_element)
 		waiting_label.show()
+		lan_discovery = LanDiscovery.new()
+		add_child(lan_discovery)
+		lan_discovery.start_broadcasting()
 	else:
 		var peer := ENetMultiplayerPeer.new()
 		var err := peer.create_client(NetworkState.host_ip, NetworkState.PORT)
@@ -131,6 +135,8 @@ func _spawn_player(id: int, spawn_position: Vector3, is_first: bool, element: El
 		player_one.match_active = true
 		player_two.match_active = true
 		waiting_label.hide()
+		if lan_discovery:
+			lan_discovery.stop()
 
 func _wire_player(player: Player, hp_bar: ChevronBar, hp_label: Label) -> void:
 	hp_bar.max_value = player.stats.max_hp
