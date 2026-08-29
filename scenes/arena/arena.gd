@@ -13,22 +13,35 @@ const PLAYER_SCENE: PackedScene = preload("res://scenes/player/Player.tscn")
 @onready var element_label_p1: Label = $HUD/HUDRoot/ElementLabelP1
 @onready var element_label_p2: Label = $HUD/HUDRoot/ElementLabelP2
 @onready var winner_label: Label = $HUD/HUDRoot/WinnerLabel
+@onready var score_label: Label = $HUD/HUDRoot/ScoreLabel
+@onready var restart_button: Button = $HUD/HUDRoot/RestartButton
+@onready var menu_text_button: Button = $HUD/HUDRoot/MenuTextButton
 @onready var menu_button: Button = $HUD/HUDRoot/MenuButton
 @onready var waiting_label: Label = $HUD/HUDRoot/WaitingLabel
 
 const MAIN_MENU_SCENE_PATH := "res://scenes/menu/MainMenu.tscn"
+const ROUNDS_TO_WIN := 2
+const ROUND_TRANSITION_DELAY := 2.5
 
 var round_manager: RoundManager = RoundManager.new()
 var player_one: Player
 var player_two: Player
 var round_over: bool = false
+var match_over: bool = false
+var pending_round_continue: bool = false
+var match_score_p1: int = 0
+var match_score_p2: int = 0
 var players_by_id: Dictionary = {}
 
 func _ready() -> void:
 	hud_root.theme = UiTheme.build()
 	winner_label.hide()
 	waiting_label.hide()
+	restart_button.hide()
+	menu_text_button.hide()
 	menu_button.pressed.connect(_on_menu_button_pressed)
+	menu_text_button.pressed.connect(_on_menu_button_pressed)
+	restart_button.pressed.connect(_on_restart_pressed)
 	if NetworkState.vs_computer:
 		_start_vs_computer()
 	elif NetworkState.is_host:
@@ -130,7 +143,7 @@ func _wire_player(player: Player, hp_bar: ChevronBar, hp_label: Label) -> void:
 	player.died.connect(_check_round_end)
 
 func _check_round_end() -> void:
-	if round_over:
+	if round_over or match_over:
 		return
 	if player_one == null or player_two == null:
 		return
@@ -138,17 +151,57 @@ func _check_round_end() -> void:
 	if winner == "":
 		return
 	round_over = true
+
 	if winner == "draw":
-		winner_label.text = "Empate! Aperte R para reiniciar"
+		winner_label.text = "Empate na rodada! Próxima rodada..."
+		winner_label.show()
+		_schedule_round_continue()
+		return
+
+	if winner == "p1":
+		match_score_p1 += 1
 	else:
-		winner_label.text = ("Jogador 1" if winner == "p1" else "Jogador 2") + " venceu! Aperte R para reiniciar"
+		match_score_p2 += 1
+	score_label.text = "%d - %d" % [match_score_p1, match_score_p2]
+
+	if match_score_p1 >= ROUNDS_TO_WIN or match_score_p2 >= ROUNDS_TO_WIN:
+		_end_match(winner)
+	else:
+		var round_winner_name := "Jogador 1" if winner == "p1" else "Jogador 2"
+		winner_label.text = "%s venceu a rodada! Placar %d - %d" % [round_winner_name, match_score_p1, match_score_p2]
+		winner_label.show()
+		_schedule_round_continue()
+
+func _end_match(winner: String) -> void:
+	match_over = true
+	var local_side := "p1" if (is_instance_valid(player_one) and player_one.is_local_player) else "p2"
+	if winner == local_side:
+		winner_label.text = "VITÓRIA! Placar final %d - %d" % [match_score_p1, match_score_p2]
+	else:
+		winner_label.text = "DERROTA. Placar final %d - %d" % [match_score_p1, match_score_p2]
 	winner_label.show()
+	restart_button.show()
+	menu_text_button.show()
+
+func _schedule_round_continue() -> void:
+	pending_round_continue = true
+	get_tree().create_timer(ROUND_TRANSITION_DELAY).timeout.connect(func():
+		if not pending_round_continue or match_over:
+			return
+		pending_round_continue = false
+		_reset_round()
+	)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if round_over and event.is_action_pressed("reset_round"):
+	if not event.is_action_pressed("reset_round"):
+		return
+	if match_over:
+		_restart_match()
+	elif round_over:
 		_reset_round()
 
 func _reset_round() -> void:
+	pending_round_continue = false
 	if multiplayer.has_multiplayer_peer():
 		if not multiplayer.is_server():
 			return
@@ -162,6 +215,31 @@ func _do_reset() -> void:
 	player_two.reset_player(spawn_p2.global_position)
 	round_over = false
 	winner_label.hide()
+
+func _on_restart_pressed() -> void:
+	_restart_match()
+
+func _restart_match() -> void:
+	pending_round_continue = false
+	if multiplayer.has_multiplayer_peer():
+		if not multiplayer.is_server():
+			return
+		_do_restart_match.rpc()
+	else:
+		_do_restart_match()
+
+@rpc("call_local", "reliable")
+func _do_restart_match() -> void:
+	match_score_p1 = 0
+	match_score_p2 = 0
+	match_over = false
+	round_over = false
+	score_label.text = "0 - 0"
+	restart_button.hide()
+	menu_text_button.hide()
+	winner_label.hide()
+	player_one.reset_player(spawn_p1.global_position)
+	player_two.reset_player(spawn_p2.global_position)
 
 func _on_menu_button_pressed() -> void:
 	if multiplayer.multiplayer_peer != null:
